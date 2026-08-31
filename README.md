@@ -16,6 +16,7 @@ multiline prompt as a `STRING`.
 - Optional `metadata` at every level for future fields such as `tags`
 - Prompt Library Composer with autogrowing string inputs and an execution preview
 - Optional workflow-specific selector aliases for multi-subject prompts
+- Optional selector daisy-chaining with separate selected and accumulated outputs
 
 ## Installation
 
@@ -36,7 +37,8 @@ Restart ComfyUI once after installation. Find the node at
 1. Edit `prompt_library.yml` in this node's folder.
 2. Add or select the Prompt Library Selector node.
 3. Choose a category, subcategory, and preset.
-4. Connect its `prompt` output to a text input or prompt-combining node.
+4. Use `selected_prompt` for only that preset, or daisy-chain
+   `combined_prompt` into the next selector's `prompt_in` socket.
 5. After editing YAML, click **Refresh library** on the node.
 
 The YAML is also re-read whenever the workflow executes. Invalid or deleted
@@ -53,6 +55,21 @@ Aliases are saved in the workflow, not the YAML library, so the same character
 preset remains reusable in different scenes.
 
 ## Compose a complete prompt
+
+For a compact graph, connect selectors in prompt order:
+
+```text
+Character combined_prompt → Outfit prompt_in
+Outfit combined_prompt → Pose prompt_in
+Pose combined_prompt → Setting prompt_in
+Setting combined_prompt → Composer text_1
+```
+
+Each selector exposes `selected_prompt` (only its own resolved preset) and
+`combined_prompt` (the incoming chain plus its selected preset). Empty presets
+are skipped. **Join style** controls the separator used at that point in the
+chain and defaults to a blank line. This leaves existing single-selector links
+working while making whole prompt stacks much cleaner.
 
 Add one Prompt Library Selector for each prompt concern, such as character,
 wardrobe, pose, expression, location, photography, and style. Connect their

@@ -37,20 +37,36 @@ class PromptLibrarySelector:
                         "placeholder": "Optional workflow alias, e.g. female_one",
                     },
                 ),
+                "join_style": (list(SEPARATORS), {"default": "Blank line"}),
+                "prompt_in": ("STRING", {"forceInput": True}),
             }
         }
 
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("prompt",)
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("selected_prompt", "combined_prompt")
     FUNCTION = "select_prompt"
     CATEGORY = "prompt/library"
     DESCRIPTION = "Select a multiline prompt from prompt_library.yml."
 
-    def select_prompt(self, category, subcategory, preset, alias=""):
-        return (apply_alias(LIBRARY.resolve(category, subcategory, preset), alias),)
+    def select_prompt(
+        self,
+        category,
+        subcategory,
+        preset,
+        alias="",
+        join_style="Blank line",
+        prompt_in=None,
+    ):
+        selected = apply_alias(
+            LIBRARY.resolve(category, subcategory, preset), alias
+        )
+        combined = compose_fragments(
+            (prompt_in, selected), SEPARATORS.get(join_style, "\n\n")
+        )
+        return (selected, combined)
 
     @classmethod
-    def VALIDATE_INPUTS(cls, category, subcategory, preset, alias=""):
+    def VALIDATE_INPUTS(cls, category, subcategory, preset, **kwargs):
         # The browser extension populates these combo values from YAML after
         # ComfyUI has loaded the node's static schema. Accept those dynamic
         # stable keys here; resolve() safely returns an empty string for stale
@@ -58,8 +74,16 @@ class PromptLibrarySelector:
         return True
 
     @classmethod
-    def IS_CHANGED(cls, category, subcategory, preset, alias=""):
-        return f"{LIBRARY.fingerprint()}:{alias}"
+    def IS_CHANGED(
+        cls,
+        category,
+        subcategory,
+        preset,
+        alias="",
+        join_style="Blank line",
+        prompt_in=None,
+    ):
+        return f"{LIBRARY.fingerprint()}:{alias}:{join_style}:{prompt_in}"
 
 
 class PromptLibraryComposer:

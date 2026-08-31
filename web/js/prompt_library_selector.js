@@ -37,6 +37,34 @@ function selectedLibraryPrompt(node) {
     return alias && prompt ? `${alias}: ${prompt.trim()}` : prompt;
 }
 
+function combinedLibraryPrompt(node, visited = new Set()) {
+    if (!node || visited.has(node.id)) return "";
+    visited.add(node.id);
+
+    const fragments = [];
+    const promptInput = node.inputs?.find((input) => input.name === "prompt_in");
+    if (promptInput?.link != null) {
+        const link = app.graph?.links?.[promptInput.link];
+        const source = link ? app.graph?.getNodeById(link.origin_id) : null;
+        if (source?.comfyClass === NODE_TYPE) {
+            const upstream = link.origin_slot === 1
+                ? combinedLibraryPrompt(source, visited)
+                : selectedLibraryPrompt(source);
+            if (upstream) fragments.push(upstream);
+        } else if (source?.comfyClass === COMPOSER_NODE_TYPE) {
+            const upstream = source._promptLibraryLiveValue ?? "";
+            if (upstream) fragments.push(upstream);
+        }
+    }
+
+    const selected = selectedLibraryPrompt(node);
+    if (selected) fragments.push(selected);
+    const separatorName = node.widgets?.find(
+        (widget) => widget.name === "join_style",
+    )?.value;
+    return fragments.join(SEPARATORS[separatorName] ?? "\n\n");
+}
+
 function retainOrNone(widget, items) {
     const labels = new Map([[NONE_KEY, NONE_LABEL]]);
     for (const item of items ?? []) labels.set(item.key, item.label);
@@ -98,6 +126,17 @@ app.registerExtension({
             alias.label = "Alias (optional)";
             alias.callback = refreshComposerPreviews;
         }
+        const joinStyle = node.widgets?.find((widget) => widget.name === "join_style");
+        if (joinStyle) {
+            joinStyle.label = "Join style";
+            joinStyle.callback = refreshComposerPreviews;
+        }
+
+        const originalConnectionsChange = node.onConnectionsChange;
+        node.onConnectionsChange = function () {
+            originalConnectionsChange?.apply(this, arguments);
+            setTimeout(refreshComposerPreviews, 0);
+        };
 
         const reload = async () => {
             try {
@@ -217,7 +256,11 @@ function setupComposer(node) {
             const link = app.graph?.links?.[input.link];
             const source = link ? app.graph?.getNodeById(link.origin_id) : null;
             let value = "";
-            if (source?.comfyClass === NODE_TYPE) value = selectedLibraryPrompt(source);
+            if (source?.comfyClass === NODE_TYPE) {
+                value = link.origin_slot === 1
+                    ? combinedLibraryPrompt(source)
+                    : selectedLibraryPrompt(source);
+            }
             if (source?.comfyClass === COMPOSER_NODE_TYPE) {
                 value = source._promptLibraryLiveValue ?? "";
             }
