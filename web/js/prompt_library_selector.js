@@ -12,9 +12,23 @@ const SEPARATORS = {
     "Space": " ",
 };
 
+function activeGraph() {
+    return app.canvas?.graph ?? app.rootGraph ?? app.graph;
+}
+
+function graphLink(linkId) {
+    const links = activeGraph()?.links;
+    if (links instanceof Map) return links.get(linkId) ?? links.get(String(linkId));
+    return links?.[linkId] ?? links?.[String(linkId)];
+}
+
+function graphNode(nodeId) {
+    return activeGraph()?.getNodeById?.(nodeId) ?? null;
+}
+
 function refreshComposerPreviews() {
-    for (const graphNode of app.graph?._nodes ?? []) {
-        graphNode._updatePromptLibraryLivePreview?.();
+    for (const node of activeGraph()?._nodes ?? []) {
+        node._updatePromptLibraryLivePreview?.();
     }
 }
 
@@ -44,10 +58,10 @@ function combinedLibraryPrompt(node, visited = new Set()) {
     const fragments = [];
     const promptInput = node.inputs?.find((input) => input.name === "prompt_in");
     if (promptInput?.link != null) {
-        const link = app.graph?.links?.[promptInput.link];
-        const source = link ? app.graph?.getNodeById(link.origin_id) : null;
+        const link = graphLink(promptInput.link);
+        const source = link ? graphNode(link.origin_id) : null;
         if (source?.comfyClass === NODE_TYPE) {
-            const upstream = link.origin_slot === 1
+            const upstream = Number(link.origin_slot) === 1
                 ? combinedLibraryPrompt(source, visited)
                 : selectedLibraryPrompt(source);
             if (upstream) fragments.push(upstream);
@@ -253,11 +267,11 @@ function setupComposer(node) {
         const fragments = [preText];
         for (const input of textInputs()) {
             if (input.link == null) continue;
-            const link = app.graph?.links?.[input.link];
-            const source = link ? app.graph?.getNodeById(link.origin_id) : null;
+            const link = graphLink(input.link);
+            const source = link ? graphNode(link.origin_id) : null;
             let value = "";
             if (source?.comfyClass === NODE_TYPE) {
-                value = link.origin_slot === 1
+                value = Number(link.origin_slot) === 1
                     ? combinedLibraryPrompt(source)
                     : selectedLibraryPrompt(source);
             }
