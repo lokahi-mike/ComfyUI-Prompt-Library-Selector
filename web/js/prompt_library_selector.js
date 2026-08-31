@@ -5,16 +5,14 @@ const NODE_TYPE = "PromptLibrarySelector";
 const NONE_KEY = "__none__";
 const NONE_LABEL = "None";
 
-function valuesFor(items) {
-    const values = { [NONE_LABEL]: NONE_KEY };
-    for (const item of items ?? []) values[item.label] = item.key;
-    return values;
-}
-
 function retainOrNone(widget, items) {
-    const keys = new Set((items ?? []).map((item) => item.key));
+    const labels = new Map([[NONE_KEY, NONE_LABEL]]);
+    for (const item of items ?? []) labels.set(item.key, item.label);
+
+    const keys = new Set(labels.keys());
     if (!keys.has(widget.value)) widget.value = NONE_KEY;
-    widget.options.values = valuesFor(items);
+    widget.options.values = [...keys];
+    widget.options.getOptionLabel = (value) => labels.get(value) ?? String(value);
 }
 
 app.registerExtension({
