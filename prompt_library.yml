@@ -1,0 +1,96 @@
+version: 1
+
+# Every level has a stable machine key and may have a friendly label plus metadata.
+# Stable keys are saved in workflows; labels can be changed without breaking them.
+categories:
+  characters:
+    label: Characters
+    metadata:
+      tags: [subject]
+    subcategories:
+      archetypes:
+        label: Archetypes
+        metadata:
+          tags: [character]
+        presets:
+          confident_lead:
+            label: Confident Lead
+            prompt: >-
+              A confident lead character with an assured posture and a calm,
+              direct expression.
+            metadata:
+              tags: [confident, lead]
+
+  outfits:
+    label: Outfits
+    subcategories:
+      editorial:
+        label: Editorial
+        presets:
+          modern_tailoring:
+            label: Modern Tailoring
+            prompt: >-
+              Wardrobe: clean modern tailoring with a refined editorial
+              silhouette and restrained styling.
+            metadata:
+              tags: [fashion, tailored]
+
+  poses:
+    label: Poses
+    subcategories:
+      standing:
+        label: Standing
+        presets:
+          relaxed_contrapposto:
+            label: Relaxed Contrapposto
+            prompt: >-
+              A relaxed contrapposto stance, weight grounded through one leg,
+              shoulders natural, hands at ease.
+
+  photography:
+    label: Photography
+    subcategories:
+      studio:
+        label: Studio
+        presets:
+          soft_editorial:
+            label: Soft Editorial Light
+            prompt: >-
+              Polished studio photography with broad soft light, gentle tonal
+              transitions, and controlled editorial contrast.
+
+  locations:
+    label: Locations
+    subcategories:
+      interiors:
+        label: Interiors
+        presets:
+          minimal_studio:
+            label: Minimal Studio
+            prompt: >-
+              A minimal studio interior with a clean seamless backdrop and an
+              uncluttered floor plane.
+
+  styles:
+    label: Styles
+    subcategories:
+      photographic:
+        label: Photographic
+        presets:
+          cinematic_realism:
+            label: Cinematic Realism
+            prompt: >-
+              Cinematic photographic realism with natural texture, balanced
+              color, and subtle filmic depth.
+
+  expressions:
+    label: Expressions
+    subcategories:
+      subtle:
+        label: Subtle
+        presets:
+          quiet_confidence:
+            label: Quiet Confidence
+            prompt: >-
+              A quietly confident expression with relaxed features and steady,
+              attentive eyes.
