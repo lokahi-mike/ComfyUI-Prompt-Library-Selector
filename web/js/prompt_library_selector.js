@@ -30,7 +30,11 @@ function selectedLibraryPrompt(node) {
     const subcategory = category?.subcategories?.find(
         (item) => item.key === subcategoryKey,
     );
-    return subcategory?.presets?.find((item) => item.key === presetKey)?.prompt ?? "";
+    const prompt = subcategory?.presets?.find((item) => item.key === presetKey)?.prompt ?? "";
+    const alias = String(
+        node.widgets?.find((widget) => widget.name === "alias")?.value ?? "",
+    ).trim();
+    return alias && prompt ? `${alias}: ${prompt.trim()}` : prompt;
 }
 
 function retainOrNone(widget, items) {
@@ -89,6 +93,11 @@ app.registerExtension({
         category.callback = updateSubcategory;
         subcategory.callback = updatePreset;
         preset.callback = refreshComposerPreviews;
+        const alias = node.widgets?.find((widget) => widget.name === "alias");
+        if (alias) {
+            alias.label = "Alias (optional)";
+            alias.callback = refreshComposerPreviews;
+        }
 
         const reload = async () => {
             try {

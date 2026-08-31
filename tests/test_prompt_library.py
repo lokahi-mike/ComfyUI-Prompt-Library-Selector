@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from prompt_library import NONE_KEY, PromptLibrary, compose_fragments
+from prompt_library import NONE_KEY, PromptLibrary, apply_alias, compose_fragments
 
 
 SAMPLE = """
@@ -63,6 +63,11 @@ class PromptLibraryTests(unittest.TestCase):
             compose_fragments([" first ", "", None, "second\n"], "\n\n"),
             "first\n\nsecond",
         )
+
+    def test_alias_is_workflow_specific_and_optional(self):
+        self.assertEqual(apply_alias("Kaley Cuoco", "female_one"), "female_one: Kaley Cuoco")
+        self.assertEqual(apply_alias("Kaley Cuoco", ""), "Kaley Cuoco")
+        self.assertEqual(apply_alias("", "female_one"), "")
 
 
 if __name__ == "__main__":

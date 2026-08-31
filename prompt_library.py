@@ -15,6 +15,15 @@ def compose_fragments(values: list[Any], separator: str) -> str:
     return separator.join(fragment for fragment in fragments if fragment)
 
 
+def apply_alias(prompt: str, alias: str) -> str:
+    """Prefix a resolved prompt with a workflow-specific subject alias."""
+    prompt = str(prompt or "").strip()
+    alias = str(alias or "").strip()
+    if not prompt or not alias:
+        return prompt
+    return f"{alias}: {prompt}"
+
+
 class PromptLibrary:
     """Load and query a prompt library without retaining stale YAML in memory."""
 

@@ -15,6 +15,7 @@ multiline prompt as a `STRING`.
 - Reloads YAML during execution, so queued prompts always use current content
 - Optional `metadata` at every level for future fields such as `tags`
 - Prompt Library Composer with autogrowing string inputs and an execution preview
+- Optional workflow-specific selector aliases for multi-subject prompts
 
 ## Installation
 
@@ -41,6 +42,15 @@ Restart ComfyUI once after installation. Find the node at
 The YAML is also re-read whenever the workflow executes. Invalid or deleted
 saved selections intentionally return an empty string instead of selecting a
 different prompt by surprise.
+
+### Subject aliases
+
+Each selector has an optional workflow-specific alias. Setting a character
+selector's alias to `female_one` prefixes its output as `female_one: <prompt>`.
+Use multiple character selectors with aliases such as `female_one` and
+`female_two`, then reference those aliases from pose and composition presets.
+Aliases are saved in the workflow, not the YAML library, so the same character
+preset remains reusable in different scenes.
 
 ## Compose a complete prompt
 
@@ -87,6 +97,17 @@ categories:
 Keep keys stable and unique within their parent group. Labels are presentation
 text and can be renamed safely. YAML multiline scalars (`>-` or `|`) are ideal
 for longer prompts.
+
+## Browser-based YAML builder
+
+Open `tools/yaml-library-builder.html` in a browser to manage the library with a
+visual editor. It can import this project's schema, add and remove categories,
+subcategories, and presets, edit tags and multiline prompts, validate duplicate
+or missing keys, copy the generated YAML, and download `prompt_library.yml`.
+
+Builder state is autosaved in that browser's local storage. The page has no
+server, build step, analytics, or external dependencies, and library content
+never leaves the browser.
 
 ## Notes
 

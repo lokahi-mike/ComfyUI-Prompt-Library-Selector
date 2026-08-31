@@ -3,7 +3,7 @@ from pathlib import Path
 from aiohttp import web
 from server import PromptServer
 
-from .prompt_library import NONE_KEY, PromptLibrary, compose_fragments
+from .prompt_library import NONE_KEY, PromptLibrary, apply_alias, compose_fragments
 
 
 LIBRARY = PromptLibrary(Path(__file__).with_name("prompt_library.yml"))
@@ -25,6 +25,17 @@ class PromptLibrarySelector:
                 "category": empty_choice,
                 "subcategory": empty_choice,
                 "preset": empty_choice,
+            },
+            "optional": {
+                "alias": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "dynamicPrompts": False,
+                        "placeholder": "Optional workflow alias, e.g. female_one",
+                    },
+                ),
             }
         }
 
@@ -34,11 +45,11 @@ class PromptLibrarySelector:
     CATEGORY = "prompt/library"
     DESCRIPTION = "Select a multiline prompt from prompt_library.yml."
 
-    def select_prompt(self, category, subcategory, preset):
-        return (LIBRARY.resolve(category, subcategory, preset),)
+    def select_prompt(self, category, subcategory, preset, alias=""):
+        return (apply_alias(LIBRARY.resolve(category, subcategory, preset), alias),)
 
     @classmethod
-    def VALIDATE_INPUTS(cls, category, subcategory, preset):
+    def VALIDATE_INPUTS(cls, category, subcategory, preset, alias=""):
         # The browser extension populates these combo values from YAML after
         # ComfyUI has loaded the node's static schema. Accept those dynamic
         # stable keys here; resolve() safely returns an empty string for stale
@@ -46,8 +57,8 @@ class PromptLibrarySelector:
         return True
 
     @classmethod
-    def IS_CHANGED(cls, category, subcategory, preset):
-        return LIBRARY.fingerprint()
+    def IS_CHANGED(cls, category, subcategory, preset, alias=""):
+        return f"{LIBRARY.fingerprint()}:{alias}"
 
 
 class PromptLibraryComposer:
