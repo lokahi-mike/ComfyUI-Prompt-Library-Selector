@@ -56,6 +56,11 @@ Prompt Library Selector values also update the preview live before queueing.
 Outputs from arbitrary nodes that calculate strings during execution appear
 after the workflow runs because those values do not yet exist in the browser.
 
+Optional multiline **Pre-text** and **Post-text** fields place fixed instructions
+before and after all connected fragments. They participate in the live preview.
+Use ordinary connected text nodes instead when those outer instructions need to
+be reusable, generated, or switched elsewhere in the workflow.
+
 Dynamic autogrow inputs currently need to remain outside ComfyUI subgraphs.
 
 ## Library format

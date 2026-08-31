@@ -56,6 +56,24 @@ class PromptLibraryComposer:
         return {
             "required": {
                 "separator": (list(SEPARATORS), {"default": "Blank line"}),
+                "pre_text": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                        "placeholder": "Optional text placed before all connected fragments",
+                    },
+                ),
+                "post_text": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                        "placeholder": "Optional text placed after all connected fragments",
+                    },
+                ),
             },
             "optional": {
                 "text_1": ("STRING", {"forceInput": True}),
@@ -68,13 +86,17 @@ class PromptLibraryComposer:
     CATEGORY = "prompt/library"
     DESCRIPTION = "Join any number of non-empty string inputs into one prompt."
 
-    def compose_prompt(self, separator, text_1=None, **kwargs):
+    def compose_prompt(
+        self, separator, pre_text="", post_text="", text_1=None, **kwargs
+    ):
         numbered = [(1, text_1)]
         for name, value in kwargs.items():
             if name.startswith("text_") and name[5:].isdigit():
                 numbered.append((int(name[5:]), value))
 
-        values = [value for _, value in sorted(numbered)]
+        values = [pre_text]
+        values.extend(value for _, value in sorted(numbered))
+        values.append(post_text)
         prompt = compose_fragments(values, SEPARATORS.get(separator, "\n\n"))
         return {"ui": {"preview": [prompt]}, "result": (prompt,)}
 

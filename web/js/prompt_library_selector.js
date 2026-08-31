@@ -189,7 +189,9 @@ function setupComposer(node) {
     };
 
     node._updatePromptLibraryLivePreview = () => {
-        const fragments = [];
+        const preText = node.widgets?.find((widget) => widget.name === "pre_text")?.value;
+        const postText = node.widgets?.find((widget) => widget.name === "post_text")?.value;
+        const fragments = [preText];
         for (const input of textInputs()) {
             if (input.link == null) continue;
             const link = app.graph?.links?.[input.link];
@@ -202,16 +204,34 @@ function setupComposer(node) {
             value = String(value ?? "").trim();
             if (value) fragments.push(value);
         }
+        fragments.push(postText);
 
         const separatorName = node.widgets?.find(
             (widget) => widget.name === "separator",
         )?.value;
-        preview.value = fragments.join(SEPARATORS[separatorName] ?? "\n\n");
+        preview.value = fragments
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean)
+            .join(SEPARATORS[separatorName] ?? "\n\n");
         node._promptLibraryLiveValue = preview.value;
     };
 
     const separatorWidget = node.widgets?.find((widget) => widget.name === "separator");
     if (separatorWidget) separatorWidget.callback = refreshComposerPreviews;
+
+    for (const [name, label] of [
+        ["pre_text", "Pre-text"],
+        ["post_text", "Post-text"],
+    ]) {
+        const widget = node.widgets?.find((item) => item.name === name);
+        if (!widget) continue;
+        widget.label = label;
+        const originalCallback = widget.callback;
+        widget.callback = function () {
+            originalCallback?.apply(this, arguments);
+            refreshComposerPreviews();
+        };
+    }
 
     setTimeout(updateInputs, 0);
     setTimeout(refreshComposerPreviews, 0);
