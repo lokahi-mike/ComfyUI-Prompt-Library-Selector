@@ -7,6 +7,7 @@ from .prompt_library import NONE_KEY, PromptLibrary, apply_alias, compose_fragme
 
 
 LIBRARY = PromptLibrary(Path(__file__).with_name("prompt_library.yml"))
+BUILDER = Path(__file__).with_name("tools") / "yaml-library-builder.html"
 
 SEPARATORS = {
     "Blank line": "\n\n",
@@ -123,6 +124,11 @@ async def get_prompt_library(_request):
         return web.json_response(LIBRARY.catalog())
     except (OSError, UnicodeError, ValueError) as error:
         return web.json_response({"error": str(error)}, status=400)
+
+
+@PromptServer.instance.routes.get("/prompt-library-selector/builder")
+async def get_prompt_library_builder(_request):
+    return web.FileResponse(BUILDER)
 
 
 NODE_CLASS_MAPPINGS = {

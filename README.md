@@ -100,8 +100,11 @@ for longer prompts.
 
 ## Browser-based YAML builder
 
-Open `tools/yaml-library-builder.html` in a browser to manage the library with a
-visual editor. It can import this project's schema, add and remove categories,
+Open `/prompt-library-selector/builder` on your running ComfyUI server to manage
+the library with a visual editor. For example, append that path to the same
+host and port used by the ComfyUI interface. You can also open
+`tools/yaml-library-builder.html` directly on a local computer. It can import
+this project's schema, add and remove categories,
 subcategories, and presets, edit tags and multiline prompts, validate duplicate
 or missing keys, copy the generated YAML, and download `prompt_library.yml`.
 
