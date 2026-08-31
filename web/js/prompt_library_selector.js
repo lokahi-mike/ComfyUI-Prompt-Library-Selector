@@ -46,6 +46,11 @@ function retainOrNone(widget, items) {
 app.registerExtension({
     name: "prompt-library-selector.cascading-selectors",
 
+    loadedGraphNode(node) {
+        if (node.comfyClass !== NODE_TYPE) return;
+        node._schedulePromptLibraryReload?.();
+    },
+
     async nodeCreated(node) {
         if (node.comfyClass === COMPOSER_NODE_TYPE) {
             setupComposer(node);
@@ -104,8 +109,14 @@ app.registerExtension({
             }
         };
 
+        node._schedulePromptLibraryReload = () => {
+            clearTimeout(node._promptLibraryReloadTimer);
+            node._promptLibraryReloadTimer = setTimeout(reload, 100);
+        };
+
         node.addWidget("button", "Refresh library", null, reload);
         await reload();
+        node._schedulePromptLibraryReload();
     },
 });
 
