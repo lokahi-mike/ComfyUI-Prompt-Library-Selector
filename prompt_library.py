@@ -9,6 +9,12 @@ import yaml
 NONE_KEY = "__none__"
 
 
+def compose_fragments(values: list[Any], separator: str) -> str:
+    """Normalize, discard empty fragments, and join them in input order."""
+    fragments = [str(value).strip() for value in values if value is not None]
+    return separator.join(fragment for fragment in fragments if fragment)
+
+
 class PromptLibrary:
     """Load and query a prompt library without retaining stale YAML in memory."""
 
@@ -51,6 +57,7 @@ class PromptLibrary:
                         {
                             "key": str(preset_key),
                             "label": self._label(preset_key, preset),
+                            "prompt": str(preset.get("prompt", "")),
                         }
                     )
                 subcategories.append(

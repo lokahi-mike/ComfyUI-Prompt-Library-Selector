@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from prompt_library import NONE_KEY, PromptLibrary
+from prompt_library import NONE_KEY, PromptLibrary, compose_fragments
 
 
 SAMPLE = """
@@ -43,6 +43,10 @@ class PromptLibraryTests(unittest.TestCase):
             catalog[0]["subcategories"][0]["presets"][0]["label"],
             "Friendly Preset",
         )
+        self.assertEqual(
+            catalog[0]["subcategories"][0]["presets"][0]["prompt"],
+            "first line\nsecond line",
+        )
 
     def test_resolve_preserves_multiline_prompt(self):
         self.assertEqual(
@@ -53,6 +57,12 @@ class PromptLibraryTests(unittest.TestCase):
     def test_none_and_removed_selections_return_empty_string(self):
         self.assertEqual(self.library.resolve(NONE_KEY, NONE_KEY, NONE_KEY), "")
         self.assertEqual(self.library.resolve("missing", "sub", "preset_key"), "")
+
+    def test_composer_strips_fragments_and_discards_empty_values(self):
+        self.assertEqual(
+            compose_fragments([" first ", "", None, "second\n"], "\n\n"),
+            "first\n\nsecond",
+        )
 
 
 if __name__ == "__main__":

@@ -3,10 +3,17 @@ from pathlib import Path
 from aiohttp import web
 from server import PromptServer
 
-from .prompt_library import NONE_KEY, PromptLibrary
+from .prompt_library import NONE_KEY, PromptLibrary, compose_fragments
 
 
 LIBRARY = PromptLibrary(Path(__file__).with_name("prompt_library.yml"))
+
+SEPARATORS = {
+    "Blank line": "\n\n",
+    "New line": "\n",
+    "Comma + space": ", ",
+    "Space": " ",
+}
 
 
 class PromptLibrarySelector:
@@ -43,6 +50,40 @@ class PromptLibrarySelector:
         return LIBRARY.fingerprint()
 
 
+class PromptLibraryComposer:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "separator": (list(SEPARATORS), {"default": "Blank line"}),
+            },
+            "optional": {
+                "text_1": ("STRING", {"forceInput": True}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("prompt",)
+    FUNCTION = "compose_prompt"
+    CATEGORY = "prompt/library"
+    DESCRIPTION = "Join any number of non-empty string inputs into one prompt."
+
+    def compose_prompt(self, separator, text_1=None, **kwargs):
+        numbered = [(1, text_1)]
+        for name, value in kwargs.items():
+            if name.startswith("text_") and name[5:].isdigit():
+                numbered.append((int(name[5:]), value))
+
+        values = [value for _, value in sorted(numbered)]
+        prompt = compose_fragments(values, SEPARATORS.get(separator, "\n\n"))
+        return {"ui": {"preview": [prompt]}, "result": (prompt,)}
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, input_types=None, **kwargs):
+        # Extra text_N sockets are created by the autogrow frontend extension.
+        return True
+
+
 @PromptServer.instance.routes.get("/prompt-library-selector/library")
 async def get_prompt_library(_request):
     try:
@@ -51,7 +92,11 @@ async def get_prompt_library(_request):
         return web.json_response({"error": str(error)}, status=400)
 
 
-NODE_CLASS_MAPPINGS = {"PromptLibrarySelector": PromptLibrarySelector}
+NODE_CLASS_MAPPINGS = {
+    "PromptLibrarySelector": PromptLibrarySelector,
+    "PromptLibraryComposer": PromptLibraryComposer,
+}
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "PromptLibrarySelector": "Prompt Library Selector"
+    "PromptLibrarySelector": "Prompt Library Selector",
+    "PromptLibraryComposer": "Prompt Library Composer",
 }

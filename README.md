@@ -14,6 +14,7 @@ multiline prompt as a `STRING`.
 - **Refresh library** button; YAML edits do not require a ComfyUI restart
 - Reloads YAML during execution, so queued prompts always use current content
 - Optional `metadata` at every level for future fields such as `tags`
+- Prompt Library Composer with autogrowing string inputs and an execution preview
 
 ## Installation
 
@@ -40,6 +41,22 @@ Restart ComfyUI once after installation. Find the node at
 The YAML is also re-read whenever the workflow executes. Invalid or deleted
 saved selections intentionally return an empty string instead of selecting a
 different prompt by surprise.
+
+## Compose a complete prompt
+
+Add one Prompt Library Selector for each prompt concern, such as character,
+wardrobe, pose, expression, location, photography, and style. Connect their
+outputs to **Prompt Library Composer** in the order they should appear.
+
+The composer always keeps one spare `STRING` socket at the bottom. Connecting
+that socket adds another, so there is no fixed input limit. It removes empty
+fragments, joins the rest using the selected separator, and outputs the complete
+prompt. Its read-only preview updates whenever the workflow executes. Upstream
+Prompt Library Selector values also update the preview live before queueing.
+Outputs from arbitrary nodes that calculate strings during execution appear
+after the workflow runs because those values do not yet exist in the browser.
+
+Dynamic autogrow inputs currently need to remain outside ComfyUI subgraphs.
 
 ## Library format
 
