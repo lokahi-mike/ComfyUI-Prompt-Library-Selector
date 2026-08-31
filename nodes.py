@@ -31,6 +31,14 @@ class PromptLibrarySelector:
         return (LIBRARY.resolve(category, subcategory, preset),)
 
     @classmethod
+    def VALIDATE_INPUTS(cls, category, subcategory, preset):
+        # The browser extension populates these combo values from YAML after
+        # ComfyUI has loaded the node's static schema. Accept those dynamic
+        # stable keys here; resolve() safely returns an empty string for stale
+        # or deleted selections.
+        return True
+
+    @classmethod
     def IS_CHANGED(cls, category, subcategory, preset):
         return LIBRARY.fingerprint()
 
