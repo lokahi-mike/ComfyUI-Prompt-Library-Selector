@@ -48,6 +48,7 @@
     button.primary { background: var(--accent); border-color: var(--accent); color: #21131a; font-weight: 750; }
     button.danger { color: #ffd8da; border-color: rgba(239, 111, 117, .55); }
     button.ghost { background: transparent; }
+    button.compact { padding: .34rem .52rem; font-size: .74rem; }
 
     header {
       display: flex;
@@ -100,7 +101,21 @@
 
     .tree-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; margin-bottom: .85rem; }
     .tree-actions button { padding: .48rem .3rem; font-size: .8rem; }
+    .tree-display-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; margin: -.45rem 0 .85rem; }
+    .tree-display-actions button { padding: .38rem .3rem; font-size: .75rem; color: var(--muted); }
     .tree { display: grid; gap: .25rem; }
+    .tree-branch { display: grid; gap: .25rem; }
+    .tree-line { display: grid; grid-template-columns: 1.7rem minmax(0, 1fr); align-items: center; gap: .12rem; }
+    .tree-line.subcategory { padding-left: 1.15rem; }
+    .tree-children { display: grid; gap: .25rem; }
+    .tree-toggle {
+      border-color: transparent;
+      background: transparent;
+      padding: .34rem .15rem;
+      color: var(--muted);
+      line-height: 1;
+    }
+    .tree-toggle:hover { background: var(--panel-2); color: var(--text); }
     .tree-row {
       width: 100%;
       text-align: left;
@@ -115,8 +130,8 @@
     .tree-row:hover { background: var(--panel-2); color: var(--text); }
     .tree-row.active { color: var(--text); background: rgba(239, 125, 168, .14); border-color: rgba(239, 125, 168, .38); }
     .tree-row.category { font-weight: 750; color: var(--text); }
-    .tree-row.subcategory { padding-left: 1.4rem; }
-    .tree-row.preset { padding-left: 2.25rem; }
+    .tree-row.subcategory { padding-left: .35rem; }
+    .tree-row.preset { padding-left: 3.25rem; }
     .tree-row .key { color: var(--muted); font-weight: 400; font-size: .75rem; }
 
     .empty {
@@ -139,10 +154,16 @@
       outline: none;
     }
     input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(239, 125, 168, .12); }
+    input.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239, 111, 117, .1); }
     textarea { resize: vertical; min-height: 8rem; line-height: 1.45; }
     #yamlOutput { flex: 1; min-height: 28rem; resize: none; border: 0; border-radius: 0; padding: 1rem; font: 12.5px/1.55 "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
     .hint { color: var(--muted); font-size: .76rem; line-height: 1.45; }
     .editor-footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: .2rem; }
+    .key-actions { display: flex; align-items: center; justify-content: space-between; gap: .55rem; }
+    .key-status.bad { color: #ffb8bc; }
+    details.metadata { border: 1px solid var(--line); border-radius: 10px; padding: .65rem .75rem; }
+    details.metadata summary { color: var(--muted); cursor: pointer; font-size: .8rem; font-weight: 650; }
+    details.metadata[open] summary { margin-bottom: .75rem; }
 
     .status {
       padding: .68rem 1rem;
@@ -191,6 +212,10 @@
           <button id="addSubcategory">+ Subcategory</button>
           <button id="addPreset">+ Preset</button>
         </div>
+        <div class="tree-display-actions">
+          <button id="collapseAll" class="ghost">Collapse all</button>
+          <button id="expandAll" class="ghost">Expand all</button>
+        </div>
         <nav id="tree" class="tree" aria-label="Prompt library hierarchy"></nav>
       </div>
     </section>
@@ -209,6 +234,7 @@
 
   <script>
     const STORAGE_KEY = "prompt-library-yaml-builder-v1";
+    const UI_STORAGE_KEY = "prompt-library-yaml-builder-ui-v1";
     const makeId = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const slugify = (value) => String(value ?? "")
       .trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -223,6 +249,7 @@
     const tagYaml = (tags) => `[${tags.map(quote).join(", ")}]`;
 
     let state = loadState();
+    let expandedIds = loadExpandedIds();
     let selection = firstSelection(state);
 
     function blankState() {
@@ -231,10 +258,6 @@
 
     function firstSelection(data) {
       const category = data.categories[0];
-      const subcategory = category?.subcategories?.[0];
-      const preset = subcategory?.presets?.[0];
-      if (preset) return { type: "preset", id: preset.id };
-      if (subcategory) return { type: "subcategory", id: subcategory.id };
       if (category) return { type: "category", id: category.id };
       return null;
     }
@@ -253,6 +276,34 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
 
+    function loadExpandedIds() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(UI_STORAGE_KEY));
+        if (Array.isArray(saved?.expandedIds)) return new Set(saved.expandedIds);
+      } catch (error) {
+        console.warn("Unable to restore collapsed sections", error);
+      }
+      return new Set();
+    }
+
+    function saveExpandedIds() {
+      const validIds = new Set(state.categories.flatMap((category) => [category.id, ...category.subcategories.map((subcategory) => subcategory.id)]));
+      expandedIds = new Set([...expandedIds].filter((id) => validIds.has(id)));
+      localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({ expandedIds: [...expandedIds] }));
+    }
+
+    function sortByLabel(items) {
+      items.sort((left, right) => String(left.label ?? "").localeCompare(String(right.label ?? ""), undefined, { sensitivity: "base" }) || String(left.key ?? "").localeCompare(String(right.key ?? ""), undefined, { sensitivity: "base" }));
+    }
+
+    function sortState() {
+      sortByLabel(state.categories);
+      for (const category of state.categories) {
+        sortByLabel(category.subcategories);
+        for (const subcategory of category.subcategories) sortByLabel(subcategory.presets);
+      }
+    }
+
     function findSelected() {
       if (!selection) return null;
       for (const category of state.categories) {
@@ -268,19 +319,21 @@
     }
 
     function newCategory(label = "New Category") {
-      return { id: makeId(), key: slugify(label), label, tags: [], subcategories: [] };
+      return { id: makeId(), key: slugify(label), label, tags: [], subcategories: [], autoKey: true };
     }
 
     function newSubcategory(label = "New Subcategory") {
-      return { id: makeId(), key: slugify(label), label, tags: [], presets: [] };
+      return { id: makeId(), key: slugify(label), label, tags: [], presets: [], autoKey: true };
     }
 
     function newPreset(label = "New Preset") {
-      return { id: makeId(), key: slugify(label), label, tags: [], prompt: "" };
+      return { id: makeId(), key: slugify(label), label, tags: [], prompt: "", autoKey: true };
     }
 
     function render() {
+      sortState();
       saveState();
+      saveExpandedIds();
       renderTree();
       renderEditor();
       const yaml = generateYaml();
@@ -301,13 +354,51 @@
         return;
       }
 
-      for (const category of state.categories) {
-        tree.append(treeButton(category, "category"));
-        for (const subcategory of category.subcategories) {
-          tree.append(treeButton(subcategory, "subcategory"));
-          for (const preset of subcategory.presets) tree.append(treeButton(preset, "preset"));
-        }
+      for (const category of state.categories) tree.append(categoryBranch(category));
+    }
+
+    function categoryBranch(category) {
+      const branch = document.createElement("div");
+      branch.className = "tree-branch";
+      branch.append(treeLine(category, "category", true));
+      if (expandedIds.has(category.id)) {
+        const children = document.createElement("div");
+        children.className = "tree-children";
+        for (const subcategory of category.subcategories) children.append(subcategoryBranch(subcategory));
+        branch.append(children);
       }
+      return branch;
+    }
+
+    function subcategoryBranch(subcategory) {
+      const branch = document.createElement("div");
+      branch.className = "tree-branch";
+      branch.append(treeLine(subcategory, "subcategory", true));
+      if (expandedIds.has(subcategory.id)) {
+        const children = document.createElement("div");
+        children.className = "tree-children";
+        for (const preset of subcategory.presets) children.append(treeButton(preset, "preset"));
+        branch.append(children);
+      }
+      return branch;
+    }
+
+    function treeLine(item, type, collapsible) {
+      const line = document.createElement("div");
+      line.className = `tree-line ${type}`;
+      const toggle = document.createElement("button");
+      toggle.className = "tree-toggle";
+      toggle.type = "button";
+      toggle.title = expandedIds.has(item.id) ? "Collapse" : "Expand";
+      toggle.setAttribute("aria-label", `${toggle.title} ${item.label || type}`);
+      toggle.textContent = expandedIds.has(item.id) ? "▾" : "▸";
+      toggle.addEventListener("click", () => {
+        if (expandedIds.has(item.id)) expandedIds.delete(item.id);
+        else expandedIds.add(item.id);
+        render();
+      });
+      line.append(toggle, treeButton(item, type));
+      return line;
     }
 
     function treeButton(item, type) {
@@ -333,8 +424,12 @@
       const form = document.createElement("div");
       form.className = "editor-grid";
       form.append(field("Friendly label", "label", found.item.label));
-      form.append(field("Stable key", "key", found.item.key));
-      form.append(field("Tags", "tags", found.item.tags.join(", "), "Comma-separated; tags are metadata and do not enter the prompt."));
+      form.append(stableKeyField(found));
+      const metadata = document.createElement("details");
+      metadata.className = "metadata";
+      metadata.innerHTML = "<summary>Optional metadata tags</summary>";
+      metadata.append(field("Tags", "tags", found.item.tags.join(", "), "Currently preserved in YAML for future use; tags do not affect selectors or prompts."));
+      form.append(metadata);
       if (selection.type === "preset") {
         form.append(field("Prompt", "prompt", found.item.prompt, "The full multiline text emitted by the selector.", true));
       }
@@ -356,12 +451,22 @@
       label.textContent = labelText;
       const input = document.createElement(multiline ? "textarea" : "input");
       input.value = value ?? "";
+      input.dataset.property = property;
       if (multiline) input.rows = 14;
       input.addEventListener("input", () => {
         const found = findSelected();
         if (!found) return;
-        found.item[property] = property === "tags" ? splitTags(input.value) : input.value;
+        if (property === "tags") found.item.tags = splitTags(input.value);
+        else if (property === "label") {
+          found.item.label = input.value;
+          if (found.item.autoKey) {
+            found.item.key = slugify(input.value);
+            const keyInput = document.querySelector('[data-property="key"]');
+            if (keyInput) keyInput.value = found.item.key;
+          }
+        } else found.item[property] = input.value;
         renderWithoutEditor();
+        updateKeyFeedback();
       });
       label.append(input);
       if (hint) {
@@ -373,8 +478,75 @@
       return label;
     }
 
+    function siblingItems(found) {
+      if (selection.type === "category") return state.categories;
+      if (selection.type === "subcategory") return found.category.subcategories;
+      return found.subcategory.presets;
+    }
+
+    function selectedKeyIssue() {
+      const found = findSelected();
+      if (!found) return "";
+      const key = String(found.item.key ?? "");
+      if (!key.trim()) return "Stable key cannot be empty.";
+      if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(key)) return "Use letters, numbers, underscores, or hyphens; begin with a letter or underscore.";
+      if (siblingItems(found).some((item) => item.id !== found.item.id && item.key === key)) return `The key “${key}” already exists at this level.`;
+      return "";
+    }
+
+    function updateKeyFeedback() {
+      const input = document.querySelector('[data-property="key"]');
+      const status = document.querySelector("#keyStatus");
+      const found = findSelected();
+      if (!input || !status || !found) return;
+      const issue = selectedKeyIssue();
+      input.classList.toggle("invalid", Boolean(issue));
+      input.setAttribute("aria-invalid", String(Boolean(issue)));
+      status.className = `hint key-status${issue ? " bad" : ""}`;
+      status.textContent = issue || (found.item.autoKey ? "Automatically follows the friendly label." : "Manually controlled; friendly-label changes will not alter it.");
+    }
+
+    function stableKeyField(found) {
+      const label = document.createElement("label");
+      label.textContent = "Stable key";
+      const input = document.createElement("input");
+      input.value = found.item.key ?? "";
+      input.dataset.property = "key";
+      input.addEventListener("input", () => {
+        const current = findSelected();
+        if (!current) return;
+        current.item.key = input.value;
+        current.item.autoKey = false;
+        renderWithoutEditor();
+        updateKeyFeedback();
+      });
+      const actions = document.createElement("div");
+      actions.className = "key-actions";
+      const status = document.createElement("span");
+      status.id = "keyStatus";
+      const regenerate = document.createElement("button");
+      regenerate.type = "button";
+      regenerate.className = "ghost compact";
+      regenerate.textContent = "Regenerate and auto-sync";
+      regenerate.addEventListener("click", () => {
+        const current = findSelected();
+        if (!current) return;
+        current.item.autoKey = true;
+        current.item.key = slugify(current.item.label);
+        input.value = current.item.key;
+        renderWithoutEditor();
+        updateKeyFeedback();
+      });
+      actions.append(status, regenerate);
+      label.append(input, actions);
+      queueMicrotask(updateKeyFeedback);
+      return label;
+    }
+
     function renderWithoutEditor() {
+      sortState();
       saveState();
+      saveExpandedIds();
       renderTree();
       document.querySelector("#yamlOutput").value = generateYaml();
       const errors = validate();
@@ -399,6 +571,7 @@
       }
       const item = newSubcategory();
       category.subcategories.push(item);
+      expandedIds.add(category.id);
       selection = { type: "subcategory", id: item.id };
       render();
     }
@@ -417,6 +590,8 @@
       }
       const item = newPreset();
       subcategory.presets.push(item);
+      expandedIds.add(category.id);
+      expandedIds.add(subcategory.id);
       selection = { type: "preset", id: item.id };
       render();
     }
@@ -428,6 +603,7 @@
       if (selection.type === "subcategory") found.category.subcategories = found.category.subcategories.filter((item) => item.id !== selection.id);
       if (selection.type === "preset") found.subcategory.presets = found.subcategory.presets.filter((item) => item.id !== selection.id);
       selection = firstSelection(state);
+      expandedIds.delete(found.item.id);
       render();
     }
 
@@ -452,6 +628,7 @@
     }
 
     function generateYaml() {
+      sortState();
       const lines = ["version: 1", "", "categories:"];
       if (!state.categories.length) return `${lines.join("\n")} {}`.replace("categories: {}", "categories: {}") + "\n";
       for (const category of state.categories) {
@@ -506,6 +683,7 @@
         if (indent === 2 && keyMatch) {
           category = newCategory(keyMatch[1]);
           category.key = keyMatch[1];
+          category.autoKey = false;
           data.categories.push(category);
           subcategory = preset = null;
           continue;
@@ -513,6 +691,7 @@
         if (indent === 6 && keyMatch && category) {
           subcategory = newSubcategory(keyMatch[1]);
           subcategory.key = keyMatch[1];
+          subcategory.autoKey = false;
           category.subcategories.push(subcategory);
           preset = null;
           continue;
@@ -520,6 +699,7 @@
         if (indent === 10 && keyMatch && subcategory) {
           preset = newPreset(keyMatch[1]);
           preset.key = keyMatch[1];
+          preset.autoKey = false;
           subcategory.presets.push(preset);
           continue;
         }
@@ -570,9 +750,17 @@
     document.querySelector("#addCategory").addEventListener("click", addCategory);
     document.querySelector("#addSubcategory").addEventListener("click", addSubcategory);
     document.querySelector("#addPreset").addEventListener("click", addPreset);
+    document.querySelector("#collapseAll").addEventListener("click", () => {
+      expandedIds.clear();
+      render();
+    });
+    document.querySelector("#expandAll").addEventListener("click", () => {
+      expandedIds = new Set(state.categories.flatMap((category) => [category.id, ...category.subcategories.map((subcategory) => subcategory.id)]));
+      render();
+    });
     document.querySelector("#newButton").addEventListener("click", () => {
       if (!confirm("Start a new library? Your current builder state will be replaced.")) return;
-      state = blankState(); selection = null; render();
+      state = blankState(); selection = null; expandedIds.clear(); render();
     });
     document.querySelector("#importButton").addEventListener("click", () => document.querySelector("#fileInput").click());
     document.querySelector("#fileInput").addEventListener("change", async (event) => {
@@ -580,6 +768,7 @@
       if (!file) return;
       try {
         state = parseYaml(await file.text());
+        expandedIds.clear();
         selection = firstSelection(state);
         render();
       } catch (error) {

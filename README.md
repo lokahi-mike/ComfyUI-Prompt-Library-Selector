@@ -124,6 +124,16 @@ host and port used by the ComfyUI interface. You can also open
 this project's schema, add and remove categories,
 subcategories, and presets, edit tags and multiline prompts, validate duplicate
 or missing keys, copy the generated YAML, and download `prompt_library.yml`.
+Categories and subcategories start collapsed, remember their expanded state in
+the browser, and can be expanded or collapsed together. Entries and generated
+YAML are sorted alphabetically by friendly label. Newly created entries derive
+snake-case stable keys from their labels until the key is manually edited;
+imported keys remain unchanged unless explicitly regenerated. Duplicate keys
+are reported inline and in the validation status.
+
+Tags are optional future-facing metadata. The selector does not currently use
+them for filtering or prompt generation, so the builder keeps their editor
+collapsed by default while preserving imported tags in generated YAML.
 
 Builder state is autosaved in that browser's local storage. The page has no
 server, build step, analytics, or external dependencies, and library content
