@@ -163,6 +163,15 @@ also supports reproducible seeded random choices and temporary per-variable
 edits that do not modify the underlying presets. **Load selected text** copies
 a chosen segment into its editable override; **Use library original** discards
 that preview-only customization.
+
+For local Krea 2 Turbo workflows, the Workbench provides advisory prompt checks
+without changing or rejecting your text. It flags fixed aliases such as
+`Female A`, subject-specific character or wardrobe presets missing
+`{{subject}}`, section headings that are unnecessary in a modular template,
+unfinished sentence fragments, unresolved variables, and duplicated assembled
+paragraphs. Negative prompts remain available for compatibility, but essential
+constraints should also be stated positively because the recommended Turbo
+workflow runs with CFG disabled.
 Categories and subcategories start collapsed, remember their expanded state in
 the browser, and can be expanded or collapsed together. Entries and generated
 YAML are sorted alphabetically by friendly label. Newly created entries derive
@@ -179,6 +188,9 @@ selector nodes continue reading each preset's `prompt`. Template execution,
 negative-prompt output, metadata output, and random selection inside ComfyUI
 are planned for the Prompt Bundle integration; today those features are fully
 available for offline authoring and preview in the Workbench.
+
+The backward-compatible implementation plan for those future nodes is recorded
+in [`docs/NODE_PLAN.md`](docs/NODE_PLAN.md).
 
 Builder state is autosaved in that browser's local storage. The page has no
 server, build step, analytics, or external dependencies, and library content
