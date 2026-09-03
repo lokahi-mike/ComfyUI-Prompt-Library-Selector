@@ -96,10 +96,25 @@ Dynamic autogrow inputs currently need to remain outside ComfyUI subgraphs.
 ```yaml
 version: 2
 templates:
-  natural_editorial:
-    label: Natural Editorial
+  two_character_editorial:
+    label: Two-Character Editorial
+    slots:
+      character_a: character
+      character_b: character
+      outfit_a: outfit
+      outfit_b: outfit
+    aliases:
+      character_a: Character A
+      character_b: Character B
+      outfit_a: Character A
+      outfit_b: Character B
     template: |-
-      {{character}} {{pose}} {{outfit}}
+      {{character_a}}
+      {{character_b}}
+      [WARDROBE]
+      {{outfit_a}}
+      {{outfit_b}}
+      {{pose}}
       {{location}} {{lighting}} {{photography}} {{mood}}
 
 categories:
@@ -135,11 +150,19 @@ and port used by the ComfyUI interface. You can also open
 
 The **Library** tab manages categories, subcategories, presets, positive and
 negative prompt text, template slots, and tags. The **Templates** tab creates
-named `{{variable}}` templates with an immediate sample preview. The **Prompt
-Playground** fills those variables from the library and displays the final
+named `{{variable}}` templates with an immediate sample preview. Every variable
+has its own library source and optional alias. For example, `character_a` and
+`character_b` can both draw from `character`, while replacing `{{subject}}` in
+their selected presets with `Character A` and `Character B`. The ready-made
+**Two characters** template wires this up for two characters and their separate
+wardrobes.
+
+The **Prompt Playground** fills those variables from the library and displays the final
 positive prompt, combined negative prompt, and deduplicated metadata tags. It
-also supports reproducible seeded random choices and temporary per-slot edits
-that do not modify the underlying presets.
+also supports reproducible seeded random choices and temporary per-variable
+edits that do not modify the underlying presets. **Load selected text** copies
+a chosen segment into its editable override; **Use library original** discards
+that preview-only customization.
 Categories and subcategories start collapsed, remember their expanded state in
 the browser, and can be expanded or collapsed together. Entries and generated
 YAML are sorted alphabetically by friendly label. Newly created entries derive

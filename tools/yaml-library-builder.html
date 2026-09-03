@@ -183,6 +183,9 @@
     .template-list button.active { background: rgba(239, 125, 168, .14); border-color: rgba(239, 125, 168, .38); }
     .variable-list { display: flex; flex-wrap: wrap; gap: .4rem; }
     .variable-pill { padding: .3rem .48rem; border: 1px solid var(--line); border-radius: 999px; color: var(--accent-2); font: .74rem "Cascadia Code", Consolas, monospace; }
+    .mapping-list { display: grid; gap: .55rem; }
+    .mapping-row { display: grid; grid-template-columns: minmax(8rem, .8fr) minmax(9rem, 1fr) minmax(9rem, 1fr); gap: .55rem; align-items: end; padding: .65rem; border: 1px solid var(--line); border-radius: 10px; }
+    .mapping-name { color: var(--accent-2); font: .78rem "Cascadia Code", Consolas, monospace; padding-bottom: .7rem; }
     .playground-controls { display: grid; gap: .8rem; }
     .playground-slot { border: 1px solid var(--line); border-radius: 11px; padding: .75rem; display: grid; gap: .55rem; }
     .playground-slot-head { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }
@@ -260,7 +263,7 @@
 
   <main id="templatesView" hidden>
     <section class="panel">
-      <div class="panel-head"><h2>Templates</h2><button id="addTemplate" class="compact">+ Template</button></div>
+      <div class="panel-head"><h2>Templates</h2><div><button id="addTemplate" class="compact">+ Single</button> <button id="addTwoCharacterTemplate" class="compact">+ Two characters</button></div></div>
       <div id="templateList" class="panel-body template-list"></div>
     </section>
     <section class="panel">
@@ -355,6 +358,8 @@
         template.label = String(template.label ?? template.key ?? "Untitled Template");
         template.key = String(template.key ?? slugify(template.label));
         template.text = String(template.text ?? template.template ?? "");
+        template.slots = template.slots && typeof template.slots === "object" ? template.slots : {};
+        template.aliases = template.aliases && typeof template.aliases === "object" ? template.aliases : {};
         template.autoKey ??= false;
       }
       for (const category of data.categories) {
@@ -465,7 +470,18 @@
     function newTemplate(label = "New Template") {
       return {
         id: makeId(), key: slugify(label), label, autoKey: true,
-        text: "{{character}}\n\n{{pose}}\n\n{{outfit}}\n\n{{location}}\n\n{{composition}}\n\n{{lighting}}\n\n{{photography}}\n\n{{mood}}",
+        slots: { character_a: "character", outfit_a: "outfit" },
+        aliases: { character_a: "Character A", outfit_a: "Character A" },
+        text: "{{character_a}}\n\n[WARDROBE]\n{{outfit_a}}\n\n{{pose}}\n\n{{location}}\n\n{{composition}}\n\n{{lighting}}\n\n{{photography}}\n\n{{mood}}",
+      };
+    }
+
+    function newTwoCharacterTemplate() {
+      return {
+        id: makeId(), key: "two_character_editorial", label: "Two-Character Editorial", autoKey: true,
+        slots: { character_a: "character", character_b: "character", outfit_a: "outfit", outfit_b: "outfit" },
+        aliases: { character_a: "Character A", character_b: "Character B", outfit_a: "Character A", outfit_b: "Character B" },
+        text: "{{character_a}}\n\n{{character_b}}\n\n[WARDROBE]\n{{outfit_a}}\n\n{{outfit_b}}\n\n{{pose}}\n\n{{location}}\n\n{{composition}}\n\n{{lighting}}\n\n{{photography}}\n\n{{mood}}",
       };
     }
 
@@ -756,6 +772,7 @@
       form.append(templateField(template, "Friendly label", "label"));
       form.append(templateKeyField(template));
       form.append(templateField(template, "Template", "text", "Insert named variables using {{slot_name}}. Changes appear in the Playground immediately.", true));
+      form.append(templateMappingsEditor(template));
       const footer = document.createElement("div");
       footer.className = "editor-footer";
       footer.innerHTML = '<span class="hint">Missing variables resolve to empty text.</span>';
@@ -782,6 +799,55 @@
       document.querySelector("#templateLivePreview").value = sampleTemplatePreview(template);
     }
 
+    function availableSourceSlots() {
+      return [...new Set(allPresets().map((entry) => entry.slot).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    }
+
+    function defaultSourceFor(variable) {
+      const stripped = String(variable).replace(/_[a-z]$|_\d+$/i, "");
+      const slots = availableSourceSlots();
+      return slots.includes(stripped) ? stripped : (slots.includes(variable) ? variable : stripped);
+    }
+
+    function suggestedAlias(variable) {
+      const match = String(variable).match(/^(?:character|subject|outfit)_([a-z])$/i);
+      return match ? `Character ${match[1].toUpperCase()}` : "";
+    }
+
+    function templateMappingsEditor(template) {
+      const details = document.createElement("details");
+      details.id = "templateMappings";
+      details.className = "metadata";
+      details.open = true;
+      const summary = document.createElement("summary");
+      summary.textContent = "Variable sources and aliases";
+      const list = document.createElement("div");
+      list.className = "mapping-list";
+      const variables = templateVariables(template.text);
+      const sources = availableSourceSlots();
+      for (const variable of variables) {
+        template.slots[variable] ||= defaultSourceFor(variable);
+        if (!(variable in template.aliases)) template.aliases[variable] = suggestedAlias(variable);
+        const row = document.createElement("div"); row.className = "mapping-row";
+        const name = document.createElement("div"); name.className = "mapping-name"; name.textContent = `{{${variable}}}`;
+        const sourceLabel = document.createElement("label"); sourceLabel.textContent = "Library source";
+        const source = document.createElement("select");
+        for (const value of [...new Set([template.slots[variable], ...sources].filter(Boolean))]) source.add(new Option(value, value));
+        if (!source.options.length) source.add(new Option("No library slots yet", ""));
+        source.value = template.slots[variable];
+        source.addEventListener("change", () => { template.slots[variable] = source.value; renderTemplateWithoutEditor(); });
+        sourceLabel.append(source);
+        const aliasLabel = document.createElement("label"); aliasLabel.textContent = "Subject alias (optional)";
+        const alias = document.createElement("input"); alias.placeholder = "Character A"; alias.value = template.aliases[variable] ?? "";
+        alias.addEventListener("input", () => { template.aliases[variable] = alias.value; renderTemplateWithoutEditor(false); });
+        aliasLabel.append(alias);
+        row.append(name, sourceLabel, aliasLabel); list.append(row);
+      }
+      if (!variables.length) list.innerHTML = '<span class="hint">Add a {{variable}} to create its source mapping.</span>';
+      details.append(summary, list);
+      return details;
+    }
+
     function templateField(template, labelText, property, hint = "", multiline = false) {
       const label = document.createElement("label");
       label.textContent = labelText;
@@ -795,7 +861,7 @@
           const keyInput = document.querySelector("#templateKey");
           if (keyInput) keyInput.value = template.key;
         }
-        renderTemplateWithoutEditor();
+        renderTemplateWithoutEditor(property === "text");
       });
       label.append(input);
       if (hint) { const help = document.createElement("span"); help.className = "hint"; help.textContent = hint; label.append(help); }
@@ -825,7 +891,7 @@
       label.append(input, actions); queueMicrotask(update); return label;
     }
 
-    function renderTemplateWithoutEditor() {
+    function renderTemplateWithoutEditor(refreshMappings = false) {
       sortState(); saveState();
       document.querySelector("#yamlOutput").value = generateYaml();
       const errors = validate();
@@ -835,6 +901,10 @@
       const variables = document.querySelector("#templateVariables");
       variables.replaceChildren();
       const template = selectedTemplate();
+      if (refreshMappings) {
+        const currentMappings = document.querySelector("#templateMappings");
+        if (currentMappings && template) currentMappings.replaceWith(templateMappingsEditor(template));
+      }
       for (const variable of templateVariables(template?.text)) {
         const pill = document.createElement("span"); pill.className = "variable-pill"; pill.textContent = `{{${variable}}}`; variables.append(pill);
       }
@@ -850,10 +920,19 @@
       const presets = allPresets();
       let assembled = template.text;
       for (const variable of templateVariables(template.text)) {
-        const entry = presets.find((candidate) => candidate.slot === variable);
-        assembled = assembled.replace(new RegExp(`{{\\s*${variable}\\s*}}`, "g"), entry?.preset.prompt ?? "");
+        const source = template.slots?.[variable] || defaultSourceFor(variable);
+        const entry = presets.find((candidate) => candidate.slot === source);
+        assembled = assembled.replace(new RegExp(`{{\\s*${variable}\\s*}}`, "g"), applySubjectAlias(entry?.preset.prompt ?? "", template.aliases?.[variable]));
       }
       return cleanAssembly(assembled);
+    }
+
+    function applySubjectAlias(prompt, alias) {
+      const text = String(prompt ?? "");
+      const name = String(alias ?? "").trim();
+      if (!text.trim() || !name) return text;
+      if (/{{\s*subject\s*}}/i.test(text)) return text.replace(/{{\s*subject\s*}}/gi, name);
+      return `${name}: ${text}`;
     }
 
     function allPresets() {
@@ -897,10 +976,11 @@
       const missing = [];
       const presets = allPresets();
       for (const variable of templateVariables(template.text)) {
-        const candidates = presets.filter((entry) => entry.slot === variable);
+        const source = template.slots?.[variable] || defaultSourceFor(variable);
+        const candidates = presets.filter((entry) => entry.slot === source);
         const box = document.createElement("div"); box.className = "playground-slot";
         const head = document.createElement("div"); head.className = "playground-slot-head";
-        const heading = document.createElement("h3"); heading.textContent = `{{${variable}}}`;
+        const heading = document.createElement("h3"); heading.textContent = `{{${variable}}} ← ${source}`;
         const resolved = document.createElement("span"); resolved.className = "resolved";
         head.append(heading, resolved);
         const select = document.createElement("select");
@@ -916,16 +996,21 @@
         const override = playground.overrides[variable] ?? { positive: "", negative: "" };
         playground.overrides[variable] = override;
         const details = document.createElement("details"); details.className = "metadata";
-        details.innerHTML = "<summary>Edit only for this preview</summary>";
-        const positive = document.createElement("textarea"); positive.placeholder = "Leave empty to use the preset prompt"; positive.value = override.positive;
-        const negative = document.createElement("textarea"); negative.placeholder = "Leave empty to use the preset negative prompt"; negative.value = override.negative;
+        details.innerHTML = "<summary>Customize this segment</summary>";
+        const editActions = document.createElement("div"); editActions.className = "toolbar-row";
+        const loadSelected = document.createElement("button"); loadSelected.type = "button"; loadSelected.className = "compact"; loadSelected.textContent = "Load selected text";
+        const resetEdit = document.createElement("button"); resetEdit.type = "button"; resetEdit.className = "ghost compact"; resetEdit.textContent = "Use library original";
+        const positive = document.createElement("textarea"); positive.placeholder = "Positive prompt override (empty uses the library original)"; positive.value = override.positive;
+        const negative = document.createElement("textarea"); negative.placeholder = "Negative prompt override (empty uses the library original)"; negative.value = override.negative;
+        loadSelected.addEventListener("click", () => { override.positive = entry?.preset.prompt ?? ""; override.negative = entry?.preset.negativePrompt ?? ""; positive.value = override.positive; negative.value = override.negative; updatePlaygroundOutput(); });
+        resetEdit.addEventListener("click", () => { override.positive = ""; override.negative = ""; positive.value = ""; negative.value = ""; updatePlaygroundOutput(); });
         positive.addEventListener("input", () => { override.positive = positive.value; updatePlaygroundOutput(); });
         negative.addEventListener("input", () => { override.negative = negative.value; updatePlaygroundOutput(); });
-        details.append(positive, negative);
+        editActions.append(loadSelected, resetEdit); details.append(editActions, positive, negative);
         select.addEventListener("change", () => { playground.selections[variable] = select.value; savePlayground(); renderPlayground(); });
         box.append(head, select, details); slots.append(box);
         const prompt = override.positive.trim() || entry?.preset.prompt || "";
-        values[variable] = prompt;
+        values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         const negativePrompt = override.negative.trim() || entry?.preset.negativePrompt || "";
         if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? [])]) tags.add(tag);
@@ -949,13 +1034,14 @@
       const missing = [];
       const presets = allPresets();
       for (const variable of templateVariables(template.text)) {
-        const candidates = presets.filter((entry) => entry.slot === variable);
+        const source = template.slots?.[variable] || defaultSourceFor(variable);
+        const candidates = presets.filter((entry) => entry.slot === source);
         const selected = playground.selections[variable] ?? "";
         let entry = candidates.find((candidate) => candidate.preset.id === selected);
         if (selected === RANDOM_KEY) entry = candidates[hashChoice(playground.seed, variable, candidates.length)];
         const override = playground.overrides[variable] ?? { positive: "", negative: "" };
         const prompt = override.positive.trim() || entry?.preset.prompt || "";
-        values[variable] = prompt;
+        values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         const negativePrompt = override.negative.trim() || entry?.preset.negativePrompt || "";
         if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? [])]) tags.add(tag);
@@ -1051,7 +1137,14 @@
 
     function librarySignature(data) {
       return JSON.stringify({
-        templates: data.templates.map((item) => ({ key: item.key, label: item.label, text: item.text })),
+        templates: data.templates.map((item) => {
+          const variables = templateVariables(item.text);
+          return {
+            key: item.key, label: item.label, text: item.text,
+            slots: Object.fromEntries(variables.map((variable) => [variable, item.slots?.[variable] || defaultSourceFor(variable)])),
+            aliases: Object.fromEntries(variables.filter((variable) => String(item.aliases?.[variable] ?? "").trim()).map((variable) => [variable, item.aliases[variable].trim()])),
+          };
+        }),
         categories: data.categories.map((category) => ({
           key: category.key, label: category.label, templateSlot: category.templateSlot, tags: category.tags,
           subcategories: category.subcategories.map((subcategory) => ({
@@ -1077,7 +1170,18 @@
       const lines = ["version: 2", "", "templates:"];
       if (!state.templates.length) lines.push("  {}");
       for (const template of state.templates) {
-        lines.push(`  ${keyLine(template.key)}:`, `    label: ${quote(template.label)}`, "    template: |-", indentPrompt(template.text, 6));
+        lines.push(`  ${keyLine(template.key)}:`, `    label: ${quote(template.label)}`);
+        const variables = templateVariables(template.text);
+        if (variables.length) {
+          lines.push("    slots:");
+          for (const variable of variables) lines.push(`      ${keyLine(variable)}: ${quote(template.slots?.[variable] || defaultSourceFor(variable))}`);
+          const aliased = variables.filter((variable) => String(template.aliases?.[variable] ?? "").trim());
+          if (aliased.length) {
+            lines.push("    aliases:");
+            for (const variable of aliased) lines.push(`      ${keyLine(variable)}: ${quote(template.aliases[variable].trim())}`);
+          }
+        }
+        lines.push("    template: |-", indentPrompt(template.text, 6));
       }
       lines.push("", "categories:");
       if (!state.categories.length) { lines.push("  {}"); return `${lines.join("\n")}\n`; }
@@ -1108,6 +1212,7 @@
       const lines = source.replace(/\r\n/g, "\n").split("\n");
       let section = null;
       let template = null;
+      let templateMapSection = null;
       let category = null;
       let subcategory = null;
       let preset = null;
@@ -1137,7 +1242,7 @@
           finishBlock();
         }
         if (!text || text.startsWith("#") || text.startsWith("version:")) continue;
-        if (text === "templates:") { section = "templates"; template = null; category = subcategory = preset = null; continue; }
+        if (text === "templates:") { section = "templates"; template = null; templateMapSection = null; category = subcategory = preset = null; continue; }
         if (text === "categories:") { section = "categories"; category = subcategory = preset = null; continue; }
 
         const keyMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*):$/);
@@ -1146,6 +1251,7 @@
           template.key = keyMatch[1];
           template.autoKey = false;
           data.templates.push(template);
+          templateMapSection = null;
           continue;
         }
         if (section === "categories" && indent === 2 && keyMatch) {
@@ -1192,6 +1298,18 @@
           continue;
         }
 
+        if (section === "templates" && indent === 4 && (text === "slots:" || text === "aliases:") && template) {
+          templateMapSection = text.slice(0, -1);
+          continue;
+        }
+        if (section === "templates" && indent === 6 && templateMapSection && template) {
+          const mappingMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/);
+          if (mappingMatch) {
+            template[templateMapSection][mappingMatch[1]] = parseScalar(mappingMatch[2]);
+            continue;
+          }
+        }
+
         if (section === "templates" && indent === 4 && /^template:\s*[>|]/.test(text) && template) {
           blockTarget = template; blockProperty = "text"; blockIndent = 6; blockLines = [];
           continue;
@@ -1231,6 +1349,16 @@
     document.querySelector("#addPreset").addEventListener("click", addPreset);
     document.querySelector("#addTemplate").addEventListener("click", () => {
       const template = newTemplate();
+      state.templates.push(template);
+      templateSelection = template.id;
+      playground.templateId = template.id;
+      render();
+    });
+    document.querySelector("#addTwoCharacterTemplate").addEventListener("click", () => {
+      const template = newTwoCharacterTemplate();
+      const used = new Set(state.templates.map((item) => item.key));
+      let suffix = 2;
+      while (used.has(template.key)) template.key = `two_character_editorial_${suffix++}`;
       state.templates.push(template);
       templateSelection = template.id;
       playground.templateId = template.id;
