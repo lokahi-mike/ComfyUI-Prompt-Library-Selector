@@ -24,6 +24,28 @@ categories:
     subcategories: {}
 """
 
+SAMPLE_V2 = """
+version: 2
+templates:
+  natural:
+    label: Natural
+    template: '{{character}}'
+categories:
+  characters:
+    label: Characters
+    template_slot: character
+    subcategories:
+      originals:
+        label: Originals
+        presets:
+          rhiannon:
+            label: Rhiannon
+            prompt: Rhiannon character prompt
+            negative_prompt: distorted face
+            metadata:
+              tags: [adult, original]
+"""
+
 
 class PromptLibraryTests(unittest.TestCase):
     def setUp(self):
@@ -68,6 +90,14 @@ class PromptLibraryTests(unittest.TestCase):
         self.assertEqual(apply_alias("Kaley Cuoco", "female_one"), "female_one: Kaley Cuoco")
         self.assertEqual(apply_alias("Kaley Cuoco", ""), "Kaley Cuoco")
         self.assertEqual(apply_alias("", "female_one"), "")
+
+    def test_version_two_workbench_fields_do_not_break_prompt_resolution(self):
+        self.path.write_text(SAMPLE_V2, encoding="utf-8")
+        self.assertEqual(self.library.load()["version"], 2)
+        self.assertEqual(
+            self.library.resolve("characters", "originals", "rhiannon"),
+            "Rhiannon character prompt",
+        )
 
 
 if __name__ == "__main__":

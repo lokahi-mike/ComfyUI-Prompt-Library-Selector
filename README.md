@@ -17,6 +17,7 @@ multiline prompt as a `STRING`.
 - Prompt Library Composer with autogrowing string inputs and an execution preview
 - Optional workflow-specific selector aliases for multi-subject prompts
 - Optional selector daisy-chaining with separate selected and accumulated outputs
+- Offline template authoring and prompt assembly playground
 
 ## Installation
 
@@ -93,10 +94,18 @@ Dynamic autogrow inputs currently need to remain outside ComfyUI subgraphs.
 ## Library format
 
 ```yaml
-version: 1
+version: 2
+templates:
+  natural_editorial:
+    label: Natural Editorial
+    template: |-
+      {{character}} {{pose}} {{outfit}}
+      {{location}} {{lighting}} {{photography}} {{mood}}
+
 categories:
   poses:                         # stable key stored in workflows
     label: Poses                 # friendly text shown in the selector
+    template_slot: pose
     metadata:
       tags: [composition]
     subcategories:
@@ -107,6 +116,8 @@ categories:
             label: Relaxed Stance
             prompt: >-
               A relaxed standing pose with natural posture and grounded feet.
+            negative_prompt: >-
+              stiff posture, floating feet
             metadata:
               tags: [single, standing]
 ```
@@ -117,13 +128,18 @@ for longer prompts.
 
 ## Browser-based YAML builder
 
-Open `/prompt-library-selector/builder` on your running ComfyUI server to manage
-the library with a visual editor. For example, append that path to the same
-host and port used by the ComfyUI interface. You can also open
-`tools/yaml-library-builder.html` directly on a local computer. It can import
-this project's schema, add and remove categories,
-subcategories, and presets, edit tags and multiline prompts, validate duplicate
-or missing keys, copy the generated YAML, and download `prompt_library.yml`.
+Open `/prompt-library-selector/builder` on your running ComfyUI server to use
+the Prompt Library Workbench. For example, append that path to the same host
+and port used by the ComfyUI interface. You can also open
+`tools/yaml-library-builder.html` directly on a local computer with no server.
+
+The **Library** tab manages categories, subcategories, presets, positive and
+negative prompt text, template slots, and tags. The **Templates** tab creates
+named `{{variable}}` templates with an immediate sample preview. The **Prompt
+Playground** fills those variables from the library and displays the final
+positive prompt, combined negative prompt, and deduplicated metadata tags. It
+also supports reproducible seeded random choices and temporary per-slot edits
+that do not modify the underlying presets.
 Categories and subcategories start collapsed, remember their expanded state in
 the browser, and can be expanded or collapsed together. Entries and generated
 YAML are sorted alphabetically by friendly label. Newly created entries derive
@@ -134,6 +150,12 @@ are reported inline and in the validation status.
 Tags are optional future-facing metadata. The selector does not currently use
 them for filtering or prompt generation, so the builder keeps their editor
 collapsed by default while preserving imported tags in generated YAML.
+
+Workbench schema v2 remains compatible with the current selector: existing
+selector nodes continue reading each preset's `prompt`. Template execution,
+negative-prompt output, metadata output, and random selection inside ComfyUI
+are planned for the Prompt Bundle integration; today those features are fully
+available for offline authoring and preview in the Workbench.
 
 Builder state is autosaved in that browser's local storage. The page has no
 server, build step, analytics, or external dependencies, and library content
