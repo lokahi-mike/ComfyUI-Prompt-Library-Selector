@@ -9,22 +9,12 @@ from .prompt_library import (
     append_bundle,
     apply_alias,
     assemble_template,
-    bundle_strings,
-    compose_fragments,
     map_bundle_to_template,
 )
 
 
 LIBRARY = PromptLibrary(Path(__file__).with_name("prompt_library.yml"))
 BUILDER = Path(__file__).with_name("tools") / "yaml-library-builder.html"
-
-SEPARATORS = {
-    "Blank line": "\n\n",
-    "New line": "\n",
-    "Comma + space": ", ",
-    "Space": " ",
-}
-
 
 class PromptLibrarySelector:
     @classmethod
@@ -46,7 +36,6 @@ class PromptLibrarySelector:
                         "placeholder": "Optional workflow alias, e.g. female_one",
                     },
                 ),
-                "join_style": (list(SEPARATORS), {"default": "Blank line"}),
                 "template_variable": (
                     "STRING",
                     {
@@ -83,18 +72,13 @@ class PromptLibrarySelector:
                         "placeholder": "Empty uses the selected YAML negative prompt",
                     },
                 ),
-                "prompt_in": ("STRING", {"forceInput": True}),
                 "bundle_in": ("PROMPT_BUNDLE", {"forceInput": True}),
             }
         }
 
-    RETURN_TYPES = (
-        "STRING", "STRING", "STRING", "STRING", "STRING", "STRING",
-        "PROMPT_BUNDLE",
-    )
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "PROMPT_BUNDLE")
     RETURN_NAMES = (
-        "selected_prompt", "combined_prompt", "selected_negative",
-        "combined_negative", "selected_tags", "combined_tags", "bundle",
+        "selected_prompt", "selected_negative", "selected_tags", "bundle",
     )
     FUNCTION = "select_prompt"
     CATEGORY = "prompt/library"
@@ -106,12 +90,10 @@ class PromptLibrarySelector:
         subcategory,
         preset,
         alias="",
-        join_style="Blank line",
         template_variable="",
         seed=0,
         prompt_override="",
         negative_override="",
-        prompt_in=None,
         bundle_in=None,
     ):
         entry = LIBRARY.resolve_entry(
@@ -122,9 +104,6 @@ class PromptLibrarySelector:
             str(negative_override or "").strip() or entry["negative_prompt"]
         )
         selected = apply_alias(raw_prompt, alias)
-        combined = compose_fragments(
-            (prompt_in, selected), SEPARATORS.get(join_style, "\n\n")
-        )
         variable = str(template_variable or "").strip() or entry["template_slot"]
         segment = {
             "variable": variable,
@@ -140,21 +119,10 @@ class PromptLibrarySelector:
             "label": entry["label"],
         }
         bundle = append_bundle(bundle_in, segment)
-        bundle_positive, combined_negative, combined_tags = bundle_strings(
-            bundle, SEPARATORS.get(join_style, "\n\n")
-        )
-        # prompt_in is the legacy string chain and cannot carry negative/tag data.
-        if prompt_in is not None:
-            bundle_positive = compose_fragments(
-                (prompt_in, selected), SEPARATORS.get(join_style, "\n\n")
-            )
         selected_tags = ", ".join(entry["tags"])
         return {
             "ui": {"resolved": [entry["label"]], "preview": [selected]},
-            "result": (
-                selected, combined or bundle_positive, raw_negative,
-                combined_negative, selected_tags, combined_tags, bundle,
-            ),
+            "result": (selected, raw_negative, selected_tags, bundle),
         }
 
     @classmethod
@@ -172,18 +140,16 @@ class PromptLibrarySelector:
         subcategory,
         preset,
         alias="",
-        join_style="Blank line",
         template_variable="",
         seed=0,
         prompt_override="",
         negative_override="",
-        prompt_in=None,
         bundle_in=None,
     ):
         return ":".join(str(value) for value in (
             LIBRARY.fingerprint(), category, subcategory, preset, alias,
-            join_style, template_variable, seed, prompt_override,
-            negative_override, prompt_in, bundle_in,
+            template_variable, seed, prompt_override, negative_override,
+            bundle_in,
         ))
 
 
@@ -251,62 +217,6 @@ class PromptLibraryTemplateComposer:
         return f"{LIBRARY.fingerprint()}:{template}:{template_override}"
 
 
-class PromptLibraryComposer:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "separator": (list(SEPARATORS), {"default": "Blank line"}),
-                "pre_text": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "multiline": True,
-                        "dynamicPrompts": False,
-                        "placeholder": "Optional text placed before all connected fragments",
-                    },
-                ),
-                "post_text": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "multiline": True,
-                        "dynamicPrompts": False,
-                        "placeholder": "Optional text placed after all connected fragments",
-                    },
-                ),
-            },
-            "optional": {
-                "text_1": ("STRING", {"forceInput": True}),
-            },
-        }
-
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("prompt",)
-    FUNCTION = "compose_prompt"
-    CATEGORY = "prompt/library"
-    DESCRIPTION = "Join any number of non-empty string inputs into one prompt."
-
-    def compose_prompt(
-        self, separator, pre_text="", post_text="", text_1=None, **kwargs
-    ):
-        numbered = [(1, text_1)]
-        for name, value in kwargs.items():
-            if name.startswith("text_") and name[5:].isdigit():
-                numbered.append((int(name[5:]), value))
-
-        values = [pre_text]
-        values.extend(value for _, value in sorted(numbered))
-        values.append(post_text)
-        prompt = compose_fragments(values, SEPARATORS.get(separator, "\n\n"))
-        return {"ui": {"preview": [prompt]}, "result": (prompt,)}
-
-    @classmethod
-    def VALIDATE_INPUTS(cls, input_types=None, **kwargs):
-        # Extra text_N sockets are created by the autogrow frontend extension.
-        return True
-
-
 @PromptServer.instance.routes.get("/prompt-library-selector/library")
 async def get_prompt_library(_request):
     try:
@@ -322,11 +232,9 @@ async def get_prompt_library_builder(_request):
 
 NODE_CLASS_MAPPINGS = {
     "PromptLibrarySelector": PromptLibrarySelector,
-    "PromptLibraryComposer": PromptLibraryComposer,
     "PromptLibraryTemplateComposer": PromptLibraryTemplateComposer,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptLibrarySelector": "Prompt Library Selector",
-    "PromptLibraryComposer": "Prompt Library Composer",
     "PromptLibraryTemplateComposer": "Prompt Library Template Composer",
 }

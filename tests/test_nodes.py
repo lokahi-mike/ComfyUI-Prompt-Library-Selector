@@ -106,25 +106,24 @@ class NodeIntegrationTests(unittest.TestCase):
         self.nodes.LIBRARY = self.original_library
         self.temp_dir.cleanup()
 
-    def test_selector_preserves_legacy_outputs_and_appends_bundle_outputs(self):
+    def test_selector_outputs_selected_values_and_bundle(self):
         response = self.nodes.PromptLibrarySelector().select_prompt(
             "characters", "people", "alpha", alias="Character A",
             template_variable="character_a",
         )
         result = response["result"]
-        self.assertEqual(len(result), 7)
+        self.assertEqual(len(result), 4)
         self.assertEqual(result[0], "Character A is Alpha.")
-        self.assertEqual(result[1], "Character A is Alpha.")
-        self.assertEqual(result[2], "duplicate face")
-        self.assertEqual(result[4], "subject, alpha")
-        self.assertEqual(result[6]["segments"][0]["variable"], "character_a")
+        self.assertEqual(result[1], "duplicate face")
+        self.assertEqual(result[2], "subject, alpha")
+        self.assertEqual(result[3]["segments"][0]["variable"], "character_a")
 
     def test_template_composer_assigns_repeated_sources_and_template_aliases(self):
         selector = self.nodes.PromptLibrarySelector()
-        first = selector.select_prompt("characters", "people", "alpha")["result"][6]
+        first = selector.select_prompt("characters", "people", "alpha")["result"][3]
         second = selector.select_prompt(
             "characters", "people", "beta", bundle_in=first
-        )["result"][6]
+        )["result"][3]
         response = self.nodes.PromptLibraryTemplateComposer().compose_template(
             "pair", bundle_in=second
         )

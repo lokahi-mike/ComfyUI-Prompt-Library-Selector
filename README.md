@@ -14,9 +14,7 @@ multiline prompt as a `STRING`.
 - **Refresh library** button; YAML edits do not require a ComfyUI restart
 - Reloads YAML during execution, so queued prompts always use current content
 - Optional `metadata` at every level for future fields such as `tags`
-- Prompt Library Composer with autogrowing string inputs and an execution preview
 - Optional workflow-specific selector aliases for multi-subject prompts
-- Optional selector daisy-chaining with separate selected and accumulated outputs
 - Offline template authoring and prompt assembly playground
 - Prompt Bundle chaining with automatic repeated-slot assignment
 - YAML Template Composer with live positive, negative, and metadata previews
@@ -41,8 +39,9 @@ Restart ComfyUI once after installation. Find the node at
 1. Edit `prompt_library.yml` in this node's folder.
 2. Add or select the Prompt Library Selector node.
 3. Choose a category, subcategory, and preset.
-4. Use `selected_prompt` for only that preset, or daisy-chain
-   `combined_prompt` into the next selector's `prompt_in` socket.
+4. Daisy-chain each selector's `bundle` output into the next selector's
+   `bundle_in` socket, then connect the final bundle to Prompt Library Template
+   Composer.
 5. After editing YAML, click **Refresh library** on the node.
 
 The YAML is also re-read whenever the workflow executes. Invalid or deleted
@@ -60,8 +59,7 @@ preset remains reusable in different scenes.
 
 ## Compose with a YAML template
 
-For the new template workflow, daisy-chain the selectors using their Prompt
-Bundle sockets rather than their legacy string sockets:
+Daisy-chain selectors using their Prompt Bundle sockets:
 
 ```text
 Character A bundle → Character B bundle_in
@@ -86,49 +84,14 @@ Each selector also provides:
 - **Random**, resolved reproducibly from its seed
 - positive and negative editable overrides
 - buttons to load the selected YAML text into those overrides or clear them
-- selected and combined negative/tag outputs
+- selected positive, negative, and tag outputs for inspection or optional
+  downstream use
 - the concrete resolved preset label after execution
 
 The Template Composer's editable override is empty by default, which keeps it
 synced to the YAML template. **Load selected template for editing** creates a
 workflow-local copy; **Use library template** clears that copy and resumes using
 the YAML version.
-
-## Compose a complete prompt
-
-For a compact graph, connect selectors in prompt order:
-
-```text
-Character combined_prompt → Outfit prompt_in
-Outfit combined_prompt → Pose prompt_in
-Pose combined_prompt → Setting prompt_in
-Setting combined_prompt → Composer text_1
-```
-
-Each selector exposes `selected_prompt` (only its own resolved preset) and
-`combined_prompt` (the incoming chain plus its selected preset). Empty presets
-are skipped. **Join style** controls the separator used at that point in the
-chain and defaults to a blank line. This leaves existing single-selector links
-working while making whole prompt stacks much cleaner.
-
-Add one Prompt Library Selector for each prompt concern, such as character,
-wardrobe, pose, expression, location, photography, and style. Connect their
-outputs to **Prompt Library Composer** in the order they should appear.
-
-The composer always keeps one spare `STRING` socket at the bottom. Connecting
-that socket adds another, so there is no fixed input limit. It removes empty
-fragments, joins the rest using the selected separator, and outputs the complete
-prompt. Its read-only preview updates whenever the workflow executes. Upstream
-Prompt Library Selector values also update the preview live before queueing.
-Outputs from arbitrary nodes that calculate strings during execution appear
-after the workflow runs because those values do not yet exist in the browser.
-
-Optional multiline **Pre-text** and **Post-text** fields place fixed instructions
-before and after all connected fragments. They participate in the live preview.
-Use ordinary connected text nodes instead when those outer instructions need to
-be reusable, generated, or switched elsewhere in the workflow.
-
-Dynamic autogrow inputs currently need to remain outside ComfyUI subgraphs.
 
 ## Library format
 
@@ -222,13 +185,9 @@ Tags are optional metadata. They do not alter prompt text, but selectors and the
 Template Composer now expose them as deduplicated comma-separated strings for
 embedding in saved image metadata or downstream routing.
 
-Workbench schema v2 remains compatible with old selector workflows: the first
-two selector outputs and the original serialized widgets retain their order.
-The Prompt Bundle, Template Composer, negative/tag outputs, overrides, and
-Random selection are additive.
-
-The backward-compatible implementation plan for those future nodes is recorded
-in [`docs/NODE_PLAN.md`](docs/NODE_PLAN.md).
+Schema v2 uses the bundle-only node workflow described in
+[`docs/NODE_PLAN.md`](docs/NODE_PLAN.md). Workflows made with the earlier
+`prompt_in`/`combined_prompt` design must be rebuilt after upgrading.
 
 Builder state is autosaved in that browser's local storage. The page has no
 server, build step, analytics, or external dependencies, and library content

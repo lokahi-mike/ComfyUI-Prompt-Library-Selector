@@ -2,17 +2,10 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const NODE_TYPE = "PromptLibrarySelector";
-const COMPOSER_NODE_TYPE = "PromptLibraryComposer";
 const TEMPLATE_COMPOSER_NODE_TYPE = "PromptLibraryTemplateComposer";
 const NONE_KEY = "__none__";
 const RANDOM_KEY = "__random__";
 const NONE_LABEL = "None";
-const SEPARATORS = {
-    "Blank line": "\n\n",
-    "New line": "\n",
-    "Comma + space": ", ",
-    "Space": " ",
-};
 
 function activeGraph() {
     return app.canvas?.graph ?? app.rootGraph ?? app.graph;
@@ -94,38 +87,6 @@ function selectedLibraryEntry(node) {
     };
 }
 
-function selectedLibraryPrompt(node) {
-    return selectedLibraryEntry(node).positive;
-}
-
-function combinedLibraryPrompt(node, visited = new Set()) {
-    if (!node || visited.has(node.id)) return "";
-    visited.add(node.id);
-
-    const fragments = [];
-    const promptInput = node.inputs?.find((input) => input.name === "prompt_in");
-    if (promptInput?.link != null) {
-        const link = graphLink(promptInput.link);
-        const source = link ? graphNode(link.origin_id) : null;
-        if (source?.comfyClass === NODE_TYPE) {
-            const upstream = Number(link.origin_slot) === 1
-                ? combinedLibraryPrompt(source, visited)
-                : selectedLibraryPrompt(source);
-            if (upstream) fragments.push(upstream);
-        } else if (source?.comfyClass === COMPOSER_NODE_TYPE) {
-            const upstream = source._promptLibraryLiveValue ?? "";
-            if (upstream) fragments.push(upstream);
-        }
-    }
-
-    const selected = selectedLibraryPrompt(node);
-    if (selected) fragments.push(selected);
-    const separatorName = node.widgets?.find(
-        (widget) => widget.name === "join_style",
-    )?.value;
-    return fragments.join(SEPARATORS[separatorName] ?? "\n\n");
-}
-
 function retainOrNone(widget, items, includeRandom = false) {
     const labels = new Map([[NONE_KEY, NONE_LABEL]]);
     if (includeRandom && items?.length) labels.set(RANDOM_KEY, "Random");
@@ -146,10 +107,6 @@ app.registerExtension({
     },
 
     async nodeCreated(node) {
-        if (node.comfyClass === COMPOSER_NODE_TYPE) {
-            setupComposer(node);
-            return;
-        }
         if (node.comfyClass === TEMPLATE_COMPOSER_NODE_TYPE) {
             await setupTemplateComposer(node);
             return;
@@ -200,11 +157,6 @@ app.registerExtension({
         if (alias) {
             alias.label = "Subject alias (optional)";
             alias.callback = refreshComposerPreviews;
-        }
-        const joinStyle = node.widgets?.find((widget) => widget.name === "join_style");
-        if (joinStyle) {
-            joinStyle.label = "Join style";
-            joinStyle.callback = refreshComposerPreviews;
         }
         for (const [name, label] of [
             ["template_variable", "Template variable"],
@@ -286,138 +238,6 @@ app.registerExtension({
         node._schedulePromptLibraryReload();
     },
 });
-
-function setupComposer(node) {
-    if (node._promptLibraryComposerReady) return;
-    node._promptLibraryComposerReady = true;
-
-    const inputNumber = (input) => Number.parseInt(input.name.slice(5), 10);
-    const textInputs = () =>
-        (node.inputs ?? [])
-            .filter((input) => /^text_\d+$/.test(input.name))
-            .sort((left, right) => inputNumber(left) - inputNumber(right));
-
-    const updateInputs = () => {
-        if (app.configuringGraph) {
-            setTimeout(updateInputs, 50);
-            return;
-        }
-
-        let inputs = textInputs();
-        if (!inputs.length) {
-            node.addInput("text_1", "STRING");
-            inputs = textInputs();
-        }
-
-        let highestConnected = -1;
-        for (let index = 0; index < inputs.length; index += 1) {
-            if (inputs[index].link != null) highestConnected = index;
-        }
-
-        const desiredCount = Math.max(1, highestConnected + 2);
-        while (inputs.length < desiredCount) {
-            const nextNumber = Math.max(...inputs.map(inputNumber), 0) + 1;
-            node.addInput(`text_${nextNumber}`, "STRING");
-            inputs = textInputs();
-        }
-
-        while (inputs.length > desiredCount) {
-            const last = inputs.at(-1);
-            if (last.link != null) break;
-            node.removeInput(node.inputs.indexOf(last));
-            inputs = textInputs();
-        }
-
-        node.setDirtyCanvas(true, true);
-    };
-
-    const originalConnectionsChange = node.onConnectionsChange;
-    node.onConnectionsChange = function () {
-        originalConnectionsChange?.apply(this, arguments);
-        setTimeout(updateInputs, 0);
-        setTimeout(refreshComposerPreviews, 0);
-    };
-
-    const preview = document.createElement("textarea");
-    preview.readOnly = true;
-    preview.placeholder = "The composed prompt appears here after execution.";
-    preview.rows = 8;
-    preview.style.width = "100%";
-    preview.style.height = "160px";
-    preview.style.boxSizing = "border-box";
-    preview.style.resize = "vertical";
-    preview.style.padding = "8px";
-
-    if (typeof node.addDOMWidget === "function") {
-        const previewWidget = node.addDOMWidget("preview", "preview", preview, {
-            serialize: false,
-            hideOnZoom: false,
-        });
-        previewWidget.computeSize = (width) => [width, 180];
-    }
-
-    const originalExecuted = node.onExecuted;
-    node.onExecuted = function (message) {
-        originalExecuted?.apply(this, arguments);
-        const value = Array.isArray(message?.preview)
-            ? message.preview[0]
-            : message?.preview;
-        preview.value = value ?? "";
-        node._promptLibraryLiveValue = preview.value;
-    };
-
-    node._updatePromptLibraryLivePreview = () => {
-        const preText = node.widgets?.find((widget) => widget.name === "pre_text")?.value;
-        const postText = node.widgets?.find((widget) => widget.name === "post_text")?.value;
-        const fragments = [preText];
-        for (const input of textInputs()) {
-            if (input.link == null) continue;
-            const link = graphLink(input.link);
-            const source = link ? graphNode(link.origin_id) : null;
-            let value = "";
-            if (source?.comfyClass === NODE_TYPE) {
-                value = Number(link.origin_slot) === 1
-                    ? combinedLibraryPrompt(source)
-                    : selectedLibraryPrompt(source);
-            }
-            if (source?.comfyClass === COMPOSER_NODE_TYPE) {
-                value = source._promptLibraryLiveValue ?? "";
-            }
-            value = String(value ?? "").trim();
-            if (value) fragments.push(value);
-        }
-        fragments.push(postText);
-
-        const separatorName = node.widgets?.find(
-            (widget) => widget.name === "separator",
-        )?.value;
-        preview.value = fragments
-            .map((value) => String(value ?? "").trim())
-            .filter(Boolean)
-            .join(SEPARATORS[separatorName] ?? "\n\n");
-        node._promptLibraryLiveValue = preview.value;
-    };
-
-    const separatorWidget = node.widgets?.find((widget) => widget.name === "separator");
-    if (separatorWidget) separatorWidget.callback = refreshComposerPreviews;
-
-    for (const [name, label] of [
-        ["pre_text", "Pre-text"],
-        ["post_text", "Post-text"],
-    ]) {
-        const widget = node.widgets?.find((item) => item.name === name);
-        if (!widget) continue;
-        widget.label = label;
-        const originalCallback = widget.callback;
-        widget.callback = function () {
-            originalCallback?.apply(this, arguments);
-            refreshComposerPreviews();
-        };
-    }
-
-    setTimeout(updateInputs, 0);
-    setTimeout(refreshComposerPreviews, 0);
-}
 
 function bundleSegmentsFromSelector(node, visited = new Set()) {
     if (!node || visited.has(node.id)) return [];

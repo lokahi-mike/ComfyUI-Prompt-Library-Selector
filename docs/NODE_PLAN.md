@@ -1,18 +1,20 @@
 # ComfyUI Prompt Bundle and Template Composer Design
 
-Implemented in the custom nodes after the Workbench schema and authoring flow
-settled. The design preserves existing workflow files and output indices.
+Implemented after the Workbench schema and authoring flow settled. The current
+design deliberately uses one structured bundle path instead of retaining the
+earlier string-concatenation sockets.
 
-## Compatibility contract
+## Node contract
 
-- Keep `PromptLibrarySelector` output 0 as `selected_prompt` and output 1 as
-  `combined_prompt`.
-- Keep the existing `category`, `subcategory`, `preset`, `alias`, `join_style`,
-  and `prompt_in` behavior.
-- Append new optional inputs and outputs; do not reorder serialized widgets.
-- Continue accepting schema v1 libraries and schema v2 libraries without
-  templates, mappings, negative prompts, or metadata.
-- Continue permissive `VALIDATE_INPUTS` handling for saved dynamic selections.
+- `PromptLibrarySelector` selects and optionally edits one library segment.
+- Its `bundle_in` accepts the preceding selector's bundle; its `bundle` output
+  contains the complete ordered segment list.
+- Its inspection outputs are `selected_prompt`, `selected_negative`, and
+  `selected_tags`.
+- `PromptLibraryTemplateComposer` is the endpoint that assembles the final
+  positive prompt, negative prompt, and deduplicated tags.
+- Dynamic selections keep permissive `VALIDATE_INPUTS` handling so renamed or
+  deleted YAML entries safely fall back to None.
 
 ## Prompt Bundle
 
@@ -44,21 +46,15 @@ independently from the same `character` catalog.
 
 ## Selector additions
 
-The original `alias` widget now performs subject-alias substitution. These
-widgets are appended after the existing serialized widgets:
+The `alias` widget performs subject-alias substitution. Selectors also expose:
 
 - `template_variable`: workflow-local name such as `character_a`.
 - `seed`: deterministic resolution for a Random preset.
 - `prompt_override`: empty means use the YAML positive prompt.
 - `negative_override`: empty means use the YAML negative prompt.
 
-Add optional `bundle_in` and append these outputs after the two legacy outputs:
-
-- selected negative prompt
-- combined negative prompt
-- selected metadata tags
-- combined metadata tags
-- prompt bundle
+Each selector accepts optional `bundle_in` and returns the selected positive,
+selected negative, selected metadata tags, and the resulting prompt bundle.
 
 Alias substitution replaces every case-insensitive `{{subject}}` token. For a
 legacy preset without that token, retain the current `Alias: prompt` fallback.
@@ -73,7 +69,7 @@ legacy preset without that token, retain the current `Alias: prompt` fallback.
 
 ## Template Composer node
 
-Create a separate node rather than changing the legacy string composer.
+The Template Composer is the sole final assembly node.
 
 Inputs:
 
@@ -105,12 +101,12 @@ online prompt expander.
 
 ## Implementation order used
 
-1. Extend the YAML parser and catalog while retaining existing return values.
+1. Extend the YAML parser and catalog for schema v2.
 2. Add pure Prompt Bundle, alias-substitution, metadata, and seeded-Random
    helpers with unit tests.
-3. Extend the selector by appending inputs and outputs.
+3. Give the selector bundle chaining, overrides, aliases, and inspection outputs.
 4. Add the Template Composer backend.
 5. Add frontend cascading controls, override helpers, resolved-Random label,
    and live preview.
-6. Test fresh nodes, saved legacy workflows, renamed or removed presets,
-   malformed YAML, bundle chaining, two-character templates, and refresh.
+6. Test fresh nodes, renamed or removed presets, malformed YAML, bundle
+   chaining, two-character templates, and refresh.
