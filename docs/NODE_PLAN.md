@@ -1,8 +1,7 @@
-# ComfyUI Prompt Bundle and Template Composer Plan
+# ComfyUI Prompt Bundle and Template Composer Design
 
-This plan deliberately leaves the current nodes unchanged until the Workbench
-schema and authoring flow have settled. Implementation must preserve existing
-workflow files and output indices.
+Implemented in the custom nodes after the Workbench schema and authoring flow
+settled. The design preserves existing workflow files and output indices.
 
 ## Compatibility contract
 
@@ -45,10 +44,10 @@ independently from the same `character` catalog.
 
 ## Selector additions
 
-Append these widgets after the existing serialized widgets:
+The original `alias` widget now performs subject-alias substitution. These
+widgets are appended after the existing serialized widgets:
 
 - `template_variable`: workflow-local name such as `character_a`.
-- `subject_alias`: workflow-local alias such as `Character A`.
 - `seed`: deterministic resolution for a Random preset.
 - `prompt_override`: empty means use the YAML positive prompt.
 - `negative_override`: empty means use the YAML negative prompt.
@@ -104,7 +103,7 @@ online prompt expander.
   outside the text bundle.
 - Do not imitate Krea's hosted creativity sliders or prompt-expansion service.
 
-## Implementation order
+## Implementation order used
 
 1. Extend the YAML parser and catalog while retaining existing return values.
 2. Add pure Prompt Bundle, alias-substitution, metadata, and seeded-Random
@@ -115,4 +114,3 @@ online prompt expander.
    and live preview.
 6. Test fresh nodes, saved legacy workflows, renamed or removed presets,
    malformed YAML, bundle chaining, two-character templates, and refresh.
-

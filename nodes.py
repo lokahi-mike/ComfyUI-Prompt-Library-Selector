@@ -3,7 +3,16 @@ from pathlib import Path
 from aiohttp import web
 from server import PromptServer
 
-from .prompt_library import NONE_KEY, PromptLibrary, apply_alias, compose_fragments
+from .prompt_library import (
+    NONE_KEY,
+    PromptLibrary,
+    append_bundle,
+    apply_alias,
+    assemble_template,
+    bundle_strings,
+    compose_fragments,
+    map_bundle_to_template,
+)
 
 
 LIBRARY = PromptLibrary(Path(__file__).with_name("prompt_library.yml"))
@@ -38,12 +47,55 @@ class PromptLibrarySelector:
                     },
                 ),
                 "join_style": (list(SEPARATORS), {"default": "Blank line"}),
+                "template_variable": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "dynamicPrompts": False,
+                        "placeholder": "e.g. character_a or wardrobe_b",
+                    },
+                ),
+                "seed": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 0xFFFFFFFFFFFFFFFF,
+                        "control_after_generate": True,
+                    },
+                ),
+                "prompt_override": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                        "placeholder": "Empty uses the selected YAML prompt",
+                    },
+                ),
+                "negative_override": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                        "placeholder": "Empty uses the selected YAML negative prompt",
+                    },
+                ),
                 "prompt_in": ("STRING", {"forceInput": True}),
+                "bundle_in": ("PROMPT_BUNDLE", {"forceInput": True}),
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("selected_prompt", "combined_prompt")
+    RETURN_TYPES = (
+        "STRING", "STRING", "STRING", "STRING", "STRING", "STRING",
+        "PROMPT_BUNDLE",
+    )
+    RETURN_NAMES = (
+        "selected_prompt", "combined_prompt", "selected_negative",
+        "combined_negative", "selected_tags", "combined_tags", "bundle",
+    )
     FUNCTION = "select_prompt"
     CATEGORY = "prompt/library"
     DESCRIPTION = "Select a multiline prompt from prompt_library.yml."
@@ -55,15 +107,55 @@ class PromptLibrarySelector:
         preset,
         alias="",
         join_style="Blank line",
+        template_variable="",
+        seed=0,
+        prompt_override="",
+        negative_override="",
         prompt_in=None,
+        bundle_in=None,
     ):
-        selected = apply_alias(
-            LIBRARY.resolve(category, subcategory, preset), alias
+        entry = LIBRARY.resolve_entry(
+            category, subcategory, preset, seed, template_variable
         )
+        raw_prompt = str(prompt_override or "").strip() or entry["prompt"]
+        raw_negative = (
+            str(negative_override or "").strip() or entry["negative_prompt"]
+        )
+        selected = apply_alias(raw_prompt, alias)
         combined = compose_fragments(
             (prompt_in, selected), SEPARATORS.get(join_style, "\n\n")
         )
-        return (selected, combined)
+        variable = str(template_variable or "").strip() or entry["template_slot"]
+        segment = {
+            "variable": variable,
+            "source": entry["template_slot"],
+            "alias": str(alias or "").strip(),
+            "raw_positive": raw_prompt,
+            "positive": selected,
+            "negative": raw_negative,
+            "tags": entry["tags"],
+            "category": category,
+            "subcategory": subcategory,
+            "preset": entry["key"],
+            "label": entry["label"],
+        }
+        bundle = append_bundle(bundle_in, segment)
+        bundle_positive, combined_negative, combined_tags = bundle_strings(
+            bundle, SEPARATORS.get(join_style, "\n\n")
+        )
+        # prompt_in is the legacy string chain and cannot carry negative/tag data.
+        if prompt_in is not None:
+            bundle_positive = compose_fragments(
+                (prompt_in, selected), SEPARATORS.get(join_style, "\n\n")
+            )
+        selected_tags = ", ".join(entry["tags"])
+        return {
+            "ui": {"resolved": [entry["label"]], "preview": [selected]},
+            "result": (
+                selected, combined or bundle_positive, raw_negative,
+                combined_negative, selected_tags, combined_tags, bundle,
+            ),
+        }
 
     @classmethod
     def VALIDATE_INPUTS(cls, category, subcategory, preset, **kwargs):
@@ -81,9 +173,82 @@ class PromptLibrarySelector:
         preset,
         alias="",
         join_style="Blank line",
+        template_variable="",
+        seed=0,
+        prompt_override="",
+        negative_override="",
         prompt_in=None,
+        bundle_in=None,
     ):
-        return f"{LIBRARY.fingerprint()}:{alias}:{join_style}:{prompt_in}"
+        return ":".join(str(value) for value in (
+            LIBRARY.fingerprint(), category, subcategory, preset, alias,
+            join_style, template_variable, seed, prompt_override,
+            negative_override, prompt_in, bundle_in,
+        ))
+
+
+class PromptLibraryTemplateComposer:
+    @classmethod
+    def INPUT_TYPES(cls):
+        empty_choice = ([NONE_KEY], {"default": NONE_KEY})
+        return {
+            "required": {
+                "template": empty_choice,
+                "template_override": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                        "placeholder": "Empty uses the selected library template",
+                    },
+                ),
+                "pre_text": (
+                    "STRING",
+                    {"default": "", "multiline": True, "dynamicPrompts": False},
+                ),
+                "post_text": (
+                    "STRING",
+                    {"default": "", "multiline": True, "dynamicPrompts": False},
+                ),
+            },
+            "optional": {"bundle_in": ("PROMPT_BUNDLE", {"forceInput": True})},
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("positive_prompt", "negative_prompt", "metadata_tags")
+    FUNCTION = "compose_template"
+    CATEGORY = "prompt/library"
+    DESCRIPTION = "Assemble a Prompt Bundle with a YAML natural-language template."
+
+    def compose_template(
+        self, template, template_override="", pre_text="", post_text="",
+        bundle_in=None,
+    ):
+        template_entry = LIBRARY.resolve_template(template)
+        template_text = str(template_override or "").strip() or template_entry["template"]
+        mapped_bundle = map_bundle_to_template(
+            bundle_in, template_entry["slots"], template_entry["aliases"]
+        )
+        positive, negative, tags = assemble_template(
+            template_text, mapped_bundle, pre_text, post_text
+        )
+        return {
+            "ui": {
+                "preview": [positive],
+                "negative_preview": [negative],
+                "tags_preview": [tags],
+            },
+            "result": (positive, negative, tags),
+        }
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, template, **kwargs):
+        return True
+
+    @classmethod
+    def IS_CHANGED(cls, template, template_override="", **kwargs):
+        return f"{LIBRARY.fingerprint()}:{template}:{template_override}"
 
 
 class PromptLibraryComposer:
@@ -158,8 +323,10 @@ async def get_prompt_library_builder(_request):
 NODE_CLASS_MAPPINGS = {
     "PromptLibrarySelector": PromptLibrarySelector,
     "PromptLibraryComposer": PromptLibraryComposer,
+    "PromptLibraryTemplateComposer": PromptLibraryTemplateComposer,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptLibrarySelector": "Prompt Library Selector",
     "PromptLibraryComposer": "Prompt Library Composer",
+    "PromptLibraryTemplateComposer": "Prompt Library Template Composer",
 }

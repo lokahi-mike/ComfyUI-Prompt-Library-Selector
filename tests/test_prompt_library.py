@@ -2,7 +2,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from prompt_library import NONE_KEY, PromptLibrary, apply_alias, compose_fragments
+from prompt_library import (
+    NONE_KEY,
+    RANDOM_KEY,
+    PromptLibrary,
+    append_bundle,
+    apply_alias,
+    assemble_template,
+    bundle_strings,
+    compose_fragments,
+    map_bundle_to_template,
+)
 
 
 SAMPLE = """
@@ -29,21 +39,34 @@ version: 2
 templates:
   natural:
     label: Natural
-    template: '{{character}}'
+    slots:
+      character_a: character
+      wardrobe_a: outfit
+    aliases:
+      character_a: Character A
+    template: |-
+      {{character_a}}
+
+      {{wardrobe_a}}
 categories:
   characters:
     label: Characters
     template_slot: character
+    metadata:
+      tags: [subject]
     subcategories:
       originals:
         label: Originals
         presets:
           rhiannon:
             label: Rhiannon
-            prompt: Rhiannon character prompt
+            prompt: '{{subject}} is Rhiannon.'
             negative_prompt: distorted face
             metadata:
               tags: [adult, original]
+          zara:
+            label: Zara
+            prompt: '{{subject}} is Zara.'
 """
 
 
@@ -91,12 +114,75 @@ class PromptLibraryTests(unittest.TestCase):
         self.assertEqual(apply_alias("Kaley Cuoco", ""), "Kaley Cuoco")
         self.assertEqual(apply_alias("", "female_one"), "")
 
+    def test_alias_replaces_subject_placeholder_before_legacy_fallback(self):
+        self.assertEqual(
+            apply_alias("{{subject}} wears black. {{SUBJECT}} smiles.", "Character B"),
+            "Character B wears black. Character B smiles.",
+        )
+
     def test_version_two_workbench_fields_do_not_break_prompt_resolution(self):
         self.path.write_text(SAMPLE_V2, encoding="utf-8")
         self.assertEqual(self.library.load()["version"], 2)
         self.assertEqual(
             self.library.resolve("characters", "originals", "rhiannon"),
-            "Rhiannon character prompt",
+            "{{subject}} is Rhiannon.",
+        )
+
+    def test_catalog_exposes_templates_negative_prompts_slots_and_tags(self):
+        self.path.write_text(SAMPLE_V2, encoding="utf-8")
+        catalog = self.library.catalog()
+        self.assertEqual(catalog["templates"][0]["slots"]["character_a"], "character")
+        preset = catalog["categories"][0]["subcategories"][0]["presets"][0]
+        self.assertEqual(preset["negative_prompt"], "distorted face")
+        self.assertEqual(preset["template_slot"], "")
+        self.assertEqual(preset["tags"], ["subject", "adult", "original"])
+
+    def test_seeded_random_is_reproducible_and_resolves_a_real_preset(self):
+        self.path.write_text(SAMPLE_V2, encoding="utf-8")
+        first = self.library.resolve_entry("characters", "originals", RANDOM_KEY, 42, "character_a")
+        second = self.library.resolve_entry("characters", "originals", RANDOM_KEY, 42, "character_a")
+        self.assertEqual(first, second)
+        self.assertIn(first["key"], {"rhiannon", "zara"})
+
+    def test_bundle_aggregation_and_template_assembly(self):
+        bundle = append_bundle(None, {
+            "variable": "character_a", "positive": "Character A is Rhiannon.",
+            "negative": "distorted face", "tags": ["subject", "adult"],
+        })
+        bundle = append_bundle(bundle, {
+            "variable": "wardrobe_a", "positive": "Character A wears black.",
+            "negative": "distorted face", "tags": ["fashion", "adult"],
+        })
+        self.assertEqual(
+            bundle_strings(bundle),
+            ("Character A is Rhiannon.\n\nCharacter A wears black.", "distorted face", "subject, adult, fashion"),
+        )
+        positive, negative, tags = assemble_template(
+            "{{character_a}}\n\n{{wardrobe_a}}\n\n{{missing}}", bundle, "Opening", "Closing"
+        )
+        self.assertEqual(
+            positive,
+            "Opening\n\nCharacter A is Rhiannon.\n\nCharacter A wears black.\n\nClosing",
+        )
+        self.assertEqual(negative, "distorted face")
+        self.assertEqual(tags, "subject, adult, fashion")
+
+    def test_repeated_sources_map_to_template_variables_in_bundle_order(self):
+        bundle = {"segments": [
+            {"variable": "character", "source": "character", "raw_positive": "{{subject}} is Rhiannon.", "positive": "{{subject}} is Rhiannon."},
+            {"variable": "character", "source": "character", "raw_positive": "{{subject}} is Florence.", "positive": "{{subject}} is Florence."},
+        ]}
+        mapped = map_bundle_to_template(
+            bundle,
+            {"character_a": "character", "character_b": "character"},
+            {"character_a": "Character A", "character_b": "Character B"},
+        )
+        self.assertEqual(
+            [(item["variable"], item["positive"]) for item in mapped["segments"]],
+            [
+                ("character_a", "Character A is Rhiannon."),
+                ("character_b", "Character B is Florence."),
+            ],
         )
 
 

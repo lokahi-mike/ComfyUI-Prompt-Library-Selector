@@ -18,6 +18,9 @@ multiline prompt as a `STRING`.
 - Optional workflow-specific selector aliases for multi-subject prompts
 - Optional selector daisy-chaining with separate selected and accumulated outputs
 - Offline template authoring and prompt assembly playground
+- Prompt Bundle chaining with automatic repeated-slot assignment
+- YAML Template Composer with live positive, negative, and metadata previews
+- Seeded `Random` preset selection and editable per-selector overrides
 
 ## Installation
 
@@ -48,12 +51,48 @@ different prompt by surprise.
 
 ### Subject aliases
 
-Each selector has an optional workflow-specific alias. Setting a character
-selector's alias to `female_one` prefixes its output as `female_one: <prompt>`.
-Use multiple character selectors with aliases such as `female_one` and
-`female_two`, then reference those aliases from pose and composition presets.
+Each selector has an optional workflow-specific alias. When a preset contains
+`{{subject}}`, the alias replaces that placeholder everywhere in the preset.
+Legacy presets without the placeholder retain the original
+`alias: <prompt>` prefix behavior.
 Aliases are saved in the workflow, not the YAML library, so the same character
 preset remains reusable in different scenes.
+
+## Compose with a YAML template
+
+For the new template workflow, daisy-chain the selectors using their Prompt
+Bundle sockets rather than their legacy string sockets:
+
+```text
+Character A bundle → Character B bundle_in
+Character B bundle → Wardrobe A bundle_in
+Wardrobe A bundle → Wardrobe B bundle_in
+Wardrobe B bundle → Template Composer bundle_in
+```
+
+Choose the YAML template in **Prompt Library Template Composer**. Its three
+outputs are the assembled positive prompt, combined negative prompt, and
+deduplicated metadata tags. All three have live previews before queueing.
+
+Incoming selectors are assigned by source and connection order. With template
+slots `character_a: character` and `character_b: character`, the first connected
+character becomes `character_a` and the second becomes `character_b`. Template
+aliases then resolve `{{subject}}` to `Character A` and `Character B`. Set a
+selector's optional **Template variable** only when you want to override this
+automatic assignment.
+
+Each selector also provides:
+
+- **Random**, resolved reproducibly from its seed
+- positive and negative editable overrides
+- buttons to load the selected YAML text into those overrides or clear them
+- selected and combined negative/tag outputs
+- the concrete resolved preset label after execution
+
+The Template Composer's editable override is empty by default, which keeps it
+synced to the YAML template. **Load selected template for editing** creates a
+workflow-local copy; **Use library template** clears that copy and resumes using
+the YAML version.
 
 ## Compose a complete prompt
 
@@ -179,15 +218,14 @@ snake-case stable keys from their labels until the key is manually edited;
 imported keys remain unchanged unless explicitly regenerated. Duplicate keys
 are reported inline and in the validation status.
 
-Tags are optional future-facing metadata. The selector does not currently use
-them for filtering or prompt generation, so the builder keeps their editor
-collapsed by default while preserving imported tags in generated YAML.
+Tags are optional metadata. They do not alter prompt text, but selectors and the
+Template Composer now expose them as deduplicated comma-separated strings for
+embedding in saved image metadata or downstream routing.
 
-Workbench schema v2 remains compatible with the current selector: existing
-selector nodes continue reading each preset's `prompt`. Template execution,
-negative-prompt output, metadata output, and random selection inside ComfyUI
-are planned for the Prompt Bundle integration; today those features are fully
-available for offline authoring and preview in the Workbench.
+Workbench schema v2 remains compatible with old selector workflows: the first
+two selector outputs and the original serialized widgets retain their order.
+The Prompt Bundle, Template Composer, negative/tag outputs, overrides, and
+Random selection are additive.
 
 The backward-compatible implementation plan for those future nodes is recorded
 in [`docs/NODE_PLAN.md`](docs/NODE_PLAN.md).
