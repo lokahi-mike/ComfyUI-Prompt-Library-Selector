@@ -177,6 +177,7 @@ class PromptLibraryTests(unittest.TestCase):
         second = self.library.resolve_entry("characters", "originals", RANDOM_KEY, 42, "character_a")
         self.assertEqual(first, second)
         self.assertIn(first["key"], {"rhiannon", "zara"})
+        self.assertIn(first["label"], {"Rhiannon", "Zara"})
 
     def test_bundle_aggregation_and_template_assembly(self):
         bundle = append_bundle(None, {

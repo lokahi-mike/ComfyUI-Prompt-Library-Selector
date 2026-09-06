@@ -76,9 +76,10 @@ class PromptLibrarySelector:
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "PROMPT_BUNDLE")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "PROMPT_BUNDLE", "STRING")
     RETURN_NAMES = (
         "selected_prompt", "selected_negative", "selected_tags", "bundle",
+        "resolved_preset_name",
     )
     FUNCTION = "select_prompt"
     CATEGORY = "prompt/library"
@@ -122,7 +123,9 @@ class PromptLibrarySelector:
         selected_tags = ", ".join(entry["tags"])
         return {
             "ui": {"resolved": [entry["label"]], "preview": [selected]},
-            "result": (selected, raw_negative, selected_tags, bundle),
+            "result": (
+                selected, raw_negative, selected_tags, bundle, entry["label"],
+            ),
         }
 
     @classmethod

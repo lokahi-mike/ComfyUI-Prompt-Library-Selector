@@ -118,11 +118,12 @@ class NodeIntegrationTests(unittest.TestCase):
             template_variable="character_a",
         )
         result = response["result"]
-        self.assertEqual(len(result), 4)
+        self.assertEqual(len(result), 5)
         self.assertEqual(result[0], "Character A is Alpha.")
         self.assertEqual(result[1], "duplicate face")
         self.assertEqual(result[2], "subject, alpha")
         self.assertEqual(result[3]["segments"][0]["variable"], "character_a")
+        self.assertEqual(result[4], "Alpha")
 
     def test_template_composer_assigns_repeated_sources_and_template_aliases(self):
         selector = self.nodes.PromptLibrarySelector()

@@ -19,6 +19,7 @@ multiline prompt as a `STRING`.
 - Prompt Bundle chaining with automatic repeated-slot assignment
 - YAML Template Composer with live positive, negative, and metadata previews
 - Seeded `Random` preset selection and editable per-selector overrides
+- Resolved friendly preset-name output for captions, overlays, and filenames
 
 ## Installation
 
@@ -92,7 +93,8 @@ Each selector also provides:
 - buttons to load the selected YAML text into those overrides or clear them
 - selected positive, negative, and tag outputs for inspection or optional
   downstream use
-- the concrete resolved preset label after execution
+- **resolved_preset_name**, containing the concrete friendly preset label after
+  execution (including the actual preset chosen by **Random**)
 
 The Template Composer's editable override is empty by default, which keeps it
 synced to the YAML template. **Load selected template for editing** creates a
