@@ -264,8 +264,19 @@
 
   <main id="templatesView" hidden>
     <section class="panel">
-      <div class="panel-head"><h2>Templates</h2><div><button id="addTemplateCategory" class="compact">+ Category</button> <button id="addTemplateSubcategory" class="compact">+ Subcategory</button> <button id="addTemplate" class="compact">+ Template</button></div></div>
-      <nav id="templateList" class="panel-body tree" aria-label="Template hierarchy"></nav>
+      <div class="panel-head"><h2>Templates</h2><span class="privacy">Saved only in this browser</span></div>
+      <div class="panel-body">
+        <div class="tree-actions">
+          <button id="addTemplateCategory">+ Category</button>
+          <button id="addTemplateSubcategory">+ Subcategory</button>
+          <button id="addTemplate">+ Template</button>
+        </div>
+        <div class="tree-display-actions">
+          <button id="collapseAllTemplates" class="ghost">Collapse all</button>
+          <button id="expandAllTemplates" class="ghost">Expand all</button>
+        </div>
+        <nav id="templateList" class="tree" aria-label="Template hierarchy"></nav>
+      </div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2 id="templateEditorTitle">Template Editor</h2></div>
@@ -861,7 +872,11 @@
       for (const category of state.templateCategories) list.append(templateCategoryBranch(category));
       const found = findTemplateSelection();
       if (!found) return;
-      title.textContent = `Edit ${templateSelection.type.replace("template", "template ").trim()}`;
+      title.textContent = {
+        templateCategory: "Edit category",
+        templateSubcategory: "Edit subcategory",
+        template: "Edit template",
+      }[templateSelection.type] ?? "Template Editor";
       const form = document.createElement("div");
       form.className = "editor-grid";
       if (!found.template) {
@@ -940,7 +955,8 @@
 
     function templateTreeLine(item, type) {
       const line = document.createElement("div");
-      line.className = `tree-line ${type}`;
+      const visualType = type === "templateCategory" ? "category" : "subcategory";
+      line.className = `tree-line ${visualType}`;
       const toggle = document.createElement("button");
       toggle.className = "tree-toggle";
       toggle.type = "button";
@@ -957,7 +973,8 @@
 
     function templateTreeButton(item, type) {
       const button = document.createElement("button");
-      button.className = `tree-row ${type}${templateSelection?.id === item.id ? " active" : ""}`;
+      const visualType = type === "templateCategory" ? "category" : type === "templateSubcategory" ? "subcategory" : "preset";
+      button.className = `tree-row ${visualType}${templateSelection?.id === item.id ? " active" : ""}`;
       button.dataset.templateTreeId = item.id;
       button.dataset.templateId = type === "template" ? item.id : "";
       button.innerHTML = `${escapeHtml(item.label || "Untitled")} <span class="key">${escapeHtml(item.key || "missing-key")}</span>`;
@@ -1768,6 +1785,20 @@
     });
     document.querySelector("#expandAll").addEventListener("click", () => {
       expandedIds = new Set(state.categories.flatMap((category) => [category.id, ...category.subcategories.map((subcategory) => subcategory.id)]));
+      render();
+    });
+    document.querySelector("#collapseAllTemplates").addEventListener("click", () => {
+      for (const category of state.templateCategories) {
+        expandedIds.delete(category.id);
+        for (const subcategory of category.subcategories) expandedIds.delete(subcategory.id);
+      }
+      render();
+    });
+    document.querySelector("#expandAllTemplates").addEventListener("click", () => {
+      for (const category of state.templateCategories) {
+        expandedIds.add(category.id);
+        for (const subcategory of category.subcategories) expandedIds.add(subcategory.id);
+      }
       render();
     });
     document.querySelector("#newButton").addEventListener("click", () => {
