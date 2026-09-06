@@ -72,6 +72,11 @@ Choose **Template Category → Template Subcategory → Template** in **Prompt
 Library Template Composer**. Its three
 outputs are the assembled positive prompt, combined negative prompt, and
 deduplicated metadata tags. All three have live previews before queueing.
+The Composer also shows a live **Template requires** checklist. Each row names
+the template variable, the library source expected from an upstream selector,
+its subject alias when present, and the selected preset or a `missing` marker.
+For example, `character_a ← character` means the chain needs a selector whose
+category or preset uses `template_slot: character`.
 
 Incoming selectors are assigned by source and connection order. With template
 slots `character_a: character` and `character_b: character`, the first connected

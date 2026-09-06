@@ -302,10 +302,37 @@ function liveTemplateAssembly(node) {
         .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
     const used = variables.map((variable) => byVariable.get(variable)).filter(Boolean);
     const unique = (values) => [...new Map(values.filter(Boolean).map((value) => [String(value).trim().toLowerCase(), String(value).trim()])).values()];
+    const requirements = Object.entries(templateSlots).map(([variable, sourceName]) => {
+        const segment = byVariable.get(variable);
+        const matchingCategories = (node._promptLibraryCatalog ?? [])
+            .filter((categoryEntry) =>
+                (categoryEntry.template_slot || categoryEntry.key) === sourceName)
+            .map((categoryEntry) => categoryEntry.label);
+        return {
+            variable,
+            source: sourceName,
+            categories: matchingCategories,
+            alias: template?.aliases?.[variable] ?? "",
+            connected: Boolean(segment),
+            selection: segment?.label ?? "",
+        };
+    });
+    for (const variable of variables) {
+        if (variable in templateSlots) continue;
+        requirements.push({
+            variable,
+            source: "unmapped",
+            categories: [],
+            alias: template?.aliases?.[variable] ?? "",
+            connected: Boolean(byVariable.get(variable)),
+            selection: byVariable.get(variable)?.label ?? "",
+        });
+    }
     return {
         positive,
         negative: unique(used.map((item) => item.negative)).join(", "),
         tags: unique(used.flatMap((item) => item.tags ?? [])).join(", "),
+        requirements,
     };
 }
 
@@ -372,6 +399,8 @@ async function setupTemplateComposer(node) {
         container.append(wrapper);
         return area;
     };
+    const requirementsPreview = makePreview("Template requires", 6);
+    requirementsPreview.placeholder = "Choose a template to see its required selector sources.";
     const positivePreview = makePreview("Live positive prompt", 10);
     const negativePreview = makePreview("Combined negative prompt", 3);
     const tagsPreview = makePreview("Metadata tags", 2);
@@ -380,11 +409,22 @@ async function setupTemplateComposer(node) {
             serialize: false,
             hideOnZoom: false,
         });
-        widget.computeSize = (width) => [width, 360];
+        widget.computeSize = (width) => [width, 470];
     }
 
     node._updatePromptLibraryLivePreview = () => {
         const assembled = liveTemplateAssembly(node);
+        requirementsPreview.value = assembled.requirements.map((requirement) => {
+            const status = requirement.connected ? "✓" : "○";
+            const alias = requirement.alias ? ` (${requirement.alias})` : "";
+            const categories = requirement.categories.length
+                ? ` [${requirement.categories.join(", ")}]`
+                : requirement.source === "unmapped" ? " [no source mapping]" : " [no matching category]";
+            const selection = requirement.connected
+                ? ` — ${requirement.selection || "connected"}`
+                : " — missing";
+            return `${status} ${requirement.variable} ← ${requirement.source}${categories}${alias}${selection}`;
+        }).join("\n");
         positivePreview.value = assembled.positive;
         negativePreview.value = assembled.negative;
         tagsPreview.value = assembled.tags;
@@ -400,10 +440,12 @@ async function setupTemplateComposer(node) {
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Unable to load prompt library");
             node._promptLibraryTemplates = data.templates ?? [];
+            node._promptLibraryCatalog = data.categories ?? [];
             updateCategory();
         } catch (error) {
             console.error("Prompt Library Template Composer:", error);
             node._promptLibraryTemplates = [];
+            node._promptLibraryCatalog = [];
             updateCategory();
         }
         node._updatePromptLibraryLivePreview();
