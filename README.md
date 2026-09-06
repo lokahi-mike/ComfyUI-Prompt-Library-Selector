@@ -163,9 +163,11 @@ full prompt frameworks under template categories and subcategories, then creates
 named `{{variable}}` inlays with an immediate sample preview. Every variable
 has its own library source and optional alias. For example, `character_a` and
 `character_b` can both draw from `character`, while replacing `{{subject}}` in
-their selected presets with `Character A` and `Character B`. The ready-made
-**Two characters** template wires this up for two characters and their separate
-wardrobes.
+their selected presets with `Character A` and `Character B`. Use the Templates
+tab's **+ Category**, **+ Subcategory**, and **+ Template** controls to build the
+same hierarchy used by the snippet library. A two-character template simply
+uses separate variables such as `character_a`, `character_b`, `outfit_a`, and
+`outfit_b`.
 
 The **Prompt Playground** fills those variables from the library and displays the final
 positive prompt, combined negative prompt, and deduplicated metadata tags. It
