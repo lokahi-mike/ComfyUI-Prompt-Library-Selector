@@ -68,7 +68,8 @@ Wardrobe A bundle → Wardrobe B bundle_in
 Wardrobe B bundle → Template Composer bundle_in
 ```
 
-Choose the YAML template in **Prompt Library Template Composer**. Its three
+Choose **Template Category → Template Subcategory → Template** in **Prompt
+Library Template Composer**. Its three
 outputs are the assembled positive prompt, combined negative prompt, and
 deduplicated metadata tags. All three have live previews before queueing.
 
@@ -96,28 +97,34 @@ the YAML version.
 ## Library format
 
 ```yaml
-version: 2
+version: 3
 templates:
-  two_character_editorial:
-    label: Two-Character Editorial
-    slots:
-      character_a: character
-      character_b: character
-      outfit_a: outfit
-      outfit_b: outfit
-    aliases:
-      character_a: Character A
-      character_b: Character B
-      outfit_a: Character A
-      outfit_b: Character B
-    template: |-
-      {{character_a}}
-      {{character_b}}
-      [WARDROBE]
-      {{outfit_a}}
-      {{outfit_b}}
-      {{pose}}
-      {{location}} {{lighting}} {{photography}} {{mood}}
+  dual:
+    label: Dual
+    subcategories:
+      cinematic:
+        label: Cinematic
+        templates:
+          two_character_editorial:
+            label: Two-Character Editorial
+            slots:
+              character_a: character
+              character_b: character
+              outfit_a: outfit
+              outfit_b: outfit
+            aliases:
+              character_a: Character A
+              character_b: Character B
+              outfit_a: Character A
+              outfit_b: Character B
+            template: |-
+              {{character_a}}
+              {{character_b}}
+              [WARDROBE]
+              {{outfit_a}}
+              {{outfit_b}}
+              {{pose}}
+              {{location}} {{lighting}} {{photography}} {{mood}}
 
 categories:
   poses:                         # stable key stored in workflows
@@ -151,8 +158,9 @@ and port used by the ComfyUI interface. You can also open
 `tools/yaml-library-builder.html` directly on a local computer with no server.
 
 The **Library** tab manages categories, subcategories, presets, positive and
-negative prompt text, template slots, and tags. The **Templates** tab creates
-named `{{variable}}` templates with an immediate sample preview. Every variable
+negative prompt text, template slots, and tags. The **Templates** tab organizes
+full prompt frameworks under template categories and subcategories, then creates
+named `{{variable}}` inlays with an immediate sample preview. Every variable
 has its own library source and optional alias. For example, `character_a` and
 `character_b` can both draw from `character`, while replacing `{{subject}}` in
 their selected presets with `Character A` and `Character B`. The ready-made
@@ -185,9 +193,12 @@ Tags are optional metadata. They do not alter prompt text, but selectors and the
 Template Composer now expose them as deduplicated comma-separated strings for
 embedding in saved image metadata or downstream routing.
 
-Schema v2 uses the bundle-only node workflow described in
+Schema v3 adds nested template categories and subcategories to the bundle-only
+node workflow described in
 [`docs/NODE_PLAN.md`](docs/NODE_PLAN.md). Workflows made with the earlier
 `prompt_in`/`combined_prompt` design must be rebuilt after upgrading.
+Flat schema-v2 templates still import into a General / General group and are
+exported in the nested schema-v3 format.
 
 Builder state is autosaved in that browser's local storage. The page has no
 server, build step, analytics, or external dependencies, and library content

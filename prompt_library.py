@@ -157,16 +157,24 @@ class PromptLibrary:
             })
 
         templates = []
-        for template_key, template in self._sorted_items(data["templates"]):
-            template = self._mapping(template, f"template '{template_key}'")
-            slots, aliases = template.get("slots", {}) or {}, template.get("aliases", {}) or {}
-            if not isinstance(slots, dict) or not isinstance(aliases, dict):
-                raise ValueError(f"template '{template_key}' mappings must be mappings")
+        template_groups = self._normalized_template_groups(data["templates"])
+        for category_key, category in self._sorted_items(template_groups):
+            category = self._mapping(category, f"template category '{category_key}'")
+            subcategories = []
+            for subcategory_key, subcategory in self._sorted_items(category.get("subcategories", {})):
+                subcategory = self._mapping(subcategory, f"template subcategory '{subcategory_key}'")
+                entries = []
+                for template_key, template in self._sorted_items(subcategory.get("templates", {})):
+                    entries.append(self._template_catalog_entry(template_key, template))
+                subcategories.append({
+                    "key": str(subcategory_key),
+                    "label": self._label(subcategory_key, subcategory),
+                    "templates": entries,
+                })
             templates.append({
-                "key": str(template_key), "label": self._label(template_key, template),
-                "template": str(template.get("template", "") or ""),
-                "slots": {str(key): str(value) for key, value in slots.items()},
-                "aliases": {str(key): str(value) for key, value in aliases.items()},
+                "key": str(category_key),
+                "label": self._label(category_key, category),
+                "subcategories": subcategories,
             })
         return {"version": data["version"], "categories": categories, "templates": templates}
 
@@ -204,15 +212,30 @@ class PromptLibrary:
     def resolve(self, category: str, subcategory: str, preset: str) -> str:
         return self.resolve_entry(category, subcategory, preset)["prompt"]
 
-    def resolve_template(self, key: str) -> dict[str, Any]:
+    def resolve_template(
+        self, category: str, subcategory: str | None = None, key: str | None = None
+    ) -> dict[str, Any]:
         empty = {"key": NONE_KEY, "label": "None", "template": "", "slots": {}, "aliases": {}}
+        # Retain direct flat-template resolution for imported schema-v2 files.
+        if key is None:
+            key = category
+            raw_templates = self.load()["templates"]
+            if key and key != NONE_KEY and self._templates_are_flat(raw_templates):
+                try:
+                    return self._template_catalog_entry(key, raw_templates[key])
+                except (KeyError, TypeError, ValueError):
+                    return empty
+            return empty
+        if NONE_KEY in (category, subcategory, key):
+            return empty
+        groups = self._normalized_template_groups(self.load()["templates"])
         if not key or key == NONE_KEY:
             return empty
         try:
-            entry = self._mapping(self.load()["templates"][key], f"template '{key}'")
+            entry = groups[category]["subcategories"][subcategory]["templates"][key]
         except (KeyError, TypeError, ValueError):
             return empty
-        return {"key": key, "label": self._label(key, entry), "template": str(entry.get("template", "") or ""), "slots": dict(entry.get("slots", {}) or {}), "aliases": dict(entry.get("aliases", {}) or {})}
+        return self._template_catalog_entry(key, entry)
 
     def fingerprint(self) -> str:
         try:
@@ -252,6 +275,43 @@ class PromptLibrary:
     @staticmethod
     def _label(key: Any, value: dict[str, Any]) -> str:
         return str(value.get("label") or str(key).replace("_", " ").title())
+
+    @classmethod
+    def _templates_are_flat(cls, templates: dict[str, Any]) -> bool:
+        return bool(templates) and all(
+            isinstance(value, dict)
+            and any(field in value for field in ("template", "slots", "aliases"))
+            for value in templates.values()
+        )
+
+    @classmethod
+    def _normalized_template_groups(cls, templates: dict[str, Any]) -> dict[str, Any]:
+        if not templates:
+            return {}
+        if cls._templates_are_flat(templates):
+            return {
+                "general": {
+                    "label": "General",
+                    "subcategories": {
+                        "general": {"label": "General", "templates": templates}
+                    },
+                }
+            }
+        return templates
+
+    @classmethod
+    def _template_catalog_entry(cls, key: Any, raw_entry: Any) -> dict[str, Any]:
+        entry = cls._mapping(raw_entry, f"template '{key}'")
+        slots, aliases = entry.get("slots", {}) or {}, entry.get("aliases", {}) or {}
+        if not isinstance(slots, dict) or not isinstance(aliases, dict):
+            raise ValueError(f"template '{key}' mappings must be mappings")
+        return {
+            "key": str(key),
+            "label": cls._label(key, entry),
+            "template": str(entry.get("template", "") or ""),
+            "slots": {str(name): str(value) for name, value in slots.items()},
+            "aliases": {str(name): str(value) for name, value in aliases.items()},
+        }
 
     @classmethod
     def _sorted_items(cls, value: Any):

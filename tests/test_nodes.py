@@ -49,20 +49,26 @@ def load_nodes_module():
 
 
 SAMPLE = """
-version: 2
+version: 3
 templates:
-  pair:
-    label: Pair
-    slots:
-      character_a: character
-      character_b: character
-    aliases:
-      character_a: Character A
-      character_b: Character B
-    template: |-
-      {{character_a}}
+  dual:
+    label: Dual
+    subcategories:
+      editorial:
+        label: Editorial
+        templates:
+          pair:
+            label: Pair
+            slots:
+              character_a: character
+              character_b: character
+            aliases:
+              character_a: Character A
+              character_b: Character B
+            template: |-
+              {{character_a}}
 
-      {{character_b}}
+              {{character_b}}
 categories:
   characters:
     label: Characters
@@ -125,7 +131,7 @@ class NodeIntegrationTests(unittest.TestCase):
             "characters", "people", "beta", bundle_in=first
         )["result"][3]
         response = self.nodes.PromptLibraryTemplateComposer().compose_template(
-            "pair", bundle_in=second
+            "dual", "editorial", "pair", bundle_in=second
         )
         positive, negative, tags = response["result"]
         self.assertEqual(positive, "Character A is Alpha.\n\nCharacter B is Beta.")

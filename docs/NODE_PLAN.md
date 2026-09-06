@@ -11,7 +11,8 @@ earlier string-concatenation sockets.
   contains the complete ordered segment list.
 - Its inspection outputs are `selected_prompt`, `selected_negative`, and
   `selected_tags`.
-- `PromptLibraryTemplateComposer` is the endpoint that assembles the final
+- `PromptLibraryTemplateComposer` selects templates through cascading category,
+  subcategory, and template widgets, then assembles the final
   positive prompt, negative prompt, and deduplicated tags.
 - Dynamic selections keep permissive `VALIDATE_INPUTS` handling so renamed or
   deleted YAML entries safely fall back to None.
@@ -101,7 +102,7 @@ online prompt expander.
 
 ## Implementation order used
 
-1. Extend the YAML parser and catalog for schema v2.
+1. Extend the YAML parser and catalog for schema v3.
 2. Add pure Prompt Bundle, alias-substitution, metadata, and seeded-Random
    helpers with unit tests.
 3. Give the selector bundle chaining, overrides, aliases, and inspection outputs.

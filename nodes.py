@@ -159,6 +159,8 @@ class PromptLibraryTemplateComposer:
         empty_choice = ([NONE_KEY], {"default": NONE_KEY})
         return {
             "required": {
+                "template_category": empty_choice,
+                "template_subcategory": empty_choice,
                 "template": empty_choice,
                 "template_override": (
                     "STRING",
@@ -188,10 +190,13 @@ class PromptLibraryTemplateComposer:
     DESCRIPTION = "Assemble a Prompt Bundle with a YAML natural-language template."
 
     def compose_template(
-        self, template, template_override="", pre_text="", post_text="",
+        self, template_category, template_subcategory, template,
+        template_override="", pre_text="", post_text="",
         bundle_in=None,
     ):
-        template_entry = LIBRARY.resolve_template(template)
+        template_entry = LIBRARY.resolve_template(
+            template_category, template_subcategory, template
+        )
         template_text = str(template_override or "").strip() or template_entry["template"]
         mapped_bundle = map_bundle_to_template(
             bundle_in, template_entry["slots"], template_entry["aliases"]
@@ -209,12 +214,20 @@ class PromptLibraryTemplateComposer:
         }
 
     @classmethod
-    def VALIDATE_INPUTS(cls, template, **kwargs):
+    def VALIDATE_INPUTS(
+        cls, template_category, template_subcategory, template, **kwargs
+    ):
         return True
 
     @classmethod
-    def IS_CHANGED(cls, template, template_override="", **kwargs):
-        return f"{LIBRARY.fingerprint()}:{template}:{template_override}"
+    def IS_CHANGED(
+        cls, template_category, template_subcategory, template,
+        template_override="", **kwargs
+    ):
+        return (
+            f"{LIBRARY.fingerprint()}:{template_category}:"
+            f"{template_subcategory}:{template}:{template_override}"
+        )
 
 
 @PromptServer.instance.routes.get("/prompt-library-selector/library")

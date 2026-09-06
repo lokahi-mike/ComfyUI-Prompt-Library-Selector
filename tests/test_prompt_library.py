@@ -35,19 +35,25 @@ categories:
 """
 
 SAMPLE_V2 = """
-version: 2
+version: 3
 templates:
-  natural:
-    label: Natural
-    slots:
-      character_a: character
-      wardrobe_a: outfit
-    aliases:
-      character_a: Character A
-    template: |-
-      {{character_a}}
+  solo:
+    label: Solo
+    subcategories:
+      natural_language:
+        label: Natural Language
+        templates:
+          natural:
+            label: Natural
+            slots:
+              character_a: character
+              wardrobe_a: outfit
+            aliases:
+              character_a: Character A
+            template: |-
+              {{character_a}}
 
-      {{wardrobe_a}}
+              {{wardrobe_a}}
 categories:
   characters:
     label: Characters
@@ -67,6 +73,15 @@ categories:
           zara:
             label: Zara
             prompt: '{{subject}} is Zara.'
+"""
+
+SAMPLE_FLAT_V2 = """
+version: 2
+templates:
+  old_template:
+    label: Old Template
+    template: '{{character}}'
+categories: {}
 """
 
 
@@ -120,9 +135,9 @@ class PromptLibraryTests(unittest.TestCase):
             "Character B wears black. Character B smiles.",
         )
 
-    def test_version_two_workbench_fields_do_not_break_prompt_resolution(self):
+    def test_version_three_workbench_fields_do_not_break_prompt_resolution(self):
         self.path.write_text(SAMPLE_V2, encoding="utf-8")
-        self.assertEqual(self.library.load()["version"], 2)
+        self.assertEqual(self.library.load()["version"], 3)
         self.assertEqual(
             self.library.resolve("characters", "originals", "rhiannon"),
             "{{subject}} is Rhiannon.",
@@ -131,11 +146,30 @@ class PromptLibraryTests(unittest.TestCase):
     def test_catalog_exposes_templates_negative_prompts_slots_and_tags(self):
         self.path.write_text(SAMPLE_V2, encoding="utf-8")
         catalog = self.library.catalog()
-        self.assertEqual(catalog["templates"][0]["slots"]["character_a"], "character")
+        template = catalog["templates"][0]["subcategories"][0]["templates"][0]
+        self.assertEqual(template["slots"]["character_a"], "character")
+        self.assertEqual(
+            self.library.resolve_template("solo", "natural_language", "natural")["label"],
+            "Natural",
+        )
         preset = catalog["categories"][0]["subcategories"][0]["presets"][0]
         self.assertEqual(preset["negative_prompt"], "distorted face")
         self.assertEqual(preset["template_slot"], "")
         self.assertEqual(preset["tags"], ["subject", "adult", "original"])
+
+    def test_flat_v2_templates_are_exposed_under_general_groups(self):
+        self.path.write_text(SAMPLE_FLAT_V2, encoding="utf-8")
+        catalog = self.library.catalog()["templates"]
+        self.assertEqual(catalog[0]["key"], "general")
+        self.assertEqual(catalog[0]["subcategories"][0]["key"], "general")
+        self.assertEqual(
+            catalog[0]["subcategories"][0]["templates"][0]["label"],
+            "Old Template",
+        )
+        self.assertEqual(
+            self.library.resolve_template("old_template")["template"],
+            "{{character}}",
+        )
 
     def test_seeded_random_is_reproducible_and_resolves_a_real_preset(self):
         self.path.write_text(SAMPLE_V2, encoding="utf-8")

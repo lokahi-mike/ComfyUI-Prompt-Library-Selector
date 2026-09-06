@@ -1,10 +1,43 @@
-version: 1
+version: 3
 
 # Every level has a stable machine key and may have a friendly label plus metadata.
 # Stable keys are saved in workflows; labels can be changed without breaking them.
+templates:
+  solo:
+    label: Solo
+    subcategories:
+      general:
+        label: General
+        templates:
+          natural_portrait:
+            label: Natural Portrait
+            slots:
+              character_a: character
+              outfit_a: outfit
+            aliases:
+              character_a: Character A
+              outfit_a: Character A
+            template: |-
+              {{character_a}}
+
+              {{outfit_a}}
+
+              {{pose}}
+
+              {{location}}
+
+              {{lighting}}
+
+              {{photography}}
+
+              {{style}}
+
+              {{mood}}
+
 categories:
   characters:
     label: Characters
+    template_slot: character
     metadata:
       tags: [subject]
     subcategories:
@@ -23,6 +56,7 @@ categories:
 
   outfits:
     label: Outfits
+    template_slot: outfit
     subcategories:
       editorial:
         label: Editorial
@@ -37,6 +71,7 @@ categories:
 
   poses:
     label: Poses
+    template_slot: pose
     subcategories:
       standing:
         label: Standing
@@ -49,6 +84,7 @@ categories:
 
   photography:
     label: Photography
+    template_slot: photography
     subcategories:
       studio:
         label: Studio
@@ -61,6 +97,7 @@ categories:
 
   locations:
     label: Locations
+    template_slot: location
     subcategories:
       interiors:
         label: Interiors
@@ -73,6 +110,7 @@ categories:
 
   styles:
     label: Styles
+    template_slot: style
     subcategories:
       photographic:
         label: Photographic
@@ -85,6 +123,7 @@ categories:
 
   expressions:
     label: Expressions
+    template_slot: mood
     subcategories:
       subtle:
         label: Subtle

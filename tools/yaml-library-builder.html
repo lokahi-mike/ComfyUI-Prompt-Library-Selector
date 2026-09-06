@@ -185,6 +185,9 @@
     .template-list { display: grid; gap: .3rem; }
     .template-list button { text-align: left; background: transparent; border-color: transparent; }
     .template-list button.active { background: rgba(239, 125, 168, .14); border-color: rgba(239, 125, 168, .38); }
+    .template-group { margin: .4rem 0 .15rem; color: var(--accent); font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .template-subgroup { margin: .2rem 0 .1rem .6rem; color: var(--muted); font-size: .76rem; font-weight: 650; }
+    .template-list button { margin-left: 1rem; width: calc(100% - 1rem); }
     .variable-list { display: flex; flex-wrap: wrap; gap: .4rem; }
     .variable-pill { padding: .3rem .48rem; border: 1px solid var(--line); border-radius: 999px; color: var(--accent-2); font: .74rem "Cascadia Code", Consolas, monospace; }
     .mapping-list { display: grid; gap: .55rem; }
@@ -336,7 +339,7 @@
     let activeView = "library";
 
     function blankState() {
-      return { version: 2, templates: [], categories: [] };
+      return { version: 3, templates: [], categories: [] };
     }
 
     function firstSelection(data) {
@@ -356,7 +359,7 @@
     }
 
     function normalizeState(data) {
-      data.version = 2;
+      data.version = 3;
       data.templates = Array.isArray(data.templates) ? data.templates : [];
       for (const template of data.templates) {
         template.id ||= makeId();
@@ -365,6 +368,10 @@
         template.text = String(template.text ?? template.template ?? "");
         template.slots = template.slots && typeof template.slots === "object" ? template.slots : {};
         template.aliases = template.aliases && typeof template.aliases === "object" ? template.aliases : {};
+        template.categoryKey = String(template.categoryKey ?? "general");
+        template.categoryLabel = String(template.categoryLabel ?? "General");
+        template.subcategoryKey = String(template.subcategoryKey ?? "general");
+        template.subcategoryLabel = String(template.subcategoryLabel ?? "General");
         template.autoKey ??= false;
       }
       for (const category of data.categories) {
@@ -438,7 +445,10 @@
     }
 
     function sortState() {
-      sortByLabel(state.templates);
+      state.templates.sort((left, right) =>
+        left.categoryLabel.localeCompare(right.categoryLabel, undefined, { sensitivity: "base" }) ||
+        left.subcategoryLabel.localeCompare(right.subcategoryLabel, undefined, { sensitivity: "base" }) ||
+        left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
       sortByLabel(state.categories);
       for (const category of state.categories) {
         sortByLabel(category.subcategories);
@@ -475,6 +485,8 @@
     function newTemplate(label = "New Template") {
       return {
         id: makeId(), key: slugify(label), label, autoKey: true,
+        categoryKey: "solo", categoryLabel: "Solo",
+        subcategoryKey: "general", subcategoryLabel: "General",
         slots: { character_a: "character", outfit_a: "outfit" },
         aliases: { character_a: "Character A", outfit_a: "Character A", pose: "Character A", mood: "Character A" },
         text: "{{character_a}}\n\n{{outfit_a}}\n\n{{pose}}\n\n{{location}}\n\n{{composition}}\n\n{{lighting}}\n\n{{photography}}\n\n{{mood}}",
@@ -484,6 +496,8 @@
     function newTwoCharacterTemplate() {
       return {
         id: makeId(), key: "two_character_editorial", label: "Two-Character Editorial", autoKey: true,
+        categoryKey: "dual", categoryLabel: "Dual",
+        subcategoryKey: "general", subcategoryLabel: "General",
         slots: { character_a: "character", character_b: "character", outfit_a: "outfit", outfit_b: "outfit" },
         aliases: { character_a: "Character A", character_b: "Character B", outfit_a: "Character A", outfit_b: "Character B" },
         text: "{{character_a}}\n\n{{character_b}}\n\n{{outfit_a}}\n\n{{outfit_b}}\n\n{{pose}}\n\n{{location}}\n\n{{composition}}\n\n{{lighting}}\n\n{{photography}}\n\n{{mood}}",
@@ -767,7 +781,7 @@
       const key = String(template?.key ?? "");
       if (!key.trim()) return "Stable key cannot be empty.";
       if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(key)) return "Use letters, numbers, underscores, or hyphens; begin with a letter or underscore.";
-      if (state.templates.some((item) => item.id !== template.id && item.key === key)) return `The key “${key}” already exists.`;
+      if (state.templates.some((item) => item.id !== template.id && item.key === key && item.categoryKey === template.categoryKey && item.subcategoryKey === template.subcategoryKey)) return `The key “${key}” already exists in this template subcategory.`;
       return "";
     }
 
@@ -788,7 +802,24 @@
         return;
       }
       if (!selectedTemplate()) templateSelection = state.templates[0].id;
+      let previousCategory = null;
+      let previousSubcategory = null;
       for (const template of state.templates) {
+        if (template.categoryKey !== previousCategory) {
+          const heading = document.createElement("div");
+          heading.className = "template-group";
+          heading.textContent = template.categoryLabel || template.categoryKey;
+          list.append(heading);
+          previousCategory = template.categoryKey;
+          previousSubcategory = null;
+        }
+        if (template.subcategoryKey !== previousSubcategory) {
+          const heading = document.createElement("div");
+          heading.className = "template-subgroup";
+          heading.textContent = template.subcategoryLabel || template.subcategoryKey;
+          list.append(heading);
+          previousSubcategory = template.subcategoryKey;
+        }
         const button = document.createElement("button");
         button.dataset.templateId = template.id;
         button.className = template.id === templateSelection ? "active" : "";
@@ -800,6 +831,8 @@
       title.textContent = "Edit template";
       const form = document.createElement("div");
       form.className = "editor-grid";
+      form.append(templateGroupField(template, "Category label", "categoryLabel", "categoryKey"));
+      form.append(templateGroupField(template, "Subcategory label", "subcategoryLabel", "subcategoryKey"));
       form.append(templateField(template, "Friendly label", "label"));
       form.append(templateKeyField(template));
       form.append(templateField(template, "Template", "text", "Insert named variables using {{slot_name}}. Changes appear in the Playground immediately.", true));
@@ -877,6 +910,36 @@
       if (!variables.length) list.innerHTML = '<span class="hint">Add a {{variable}} to create its source mapping.</span>';
       details.append(summary, list);
       return details;
+    }
+
+    function templateGroupField(template, labelText, labelProperty, keyProperty) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "editor-grid two";
+      const label = document.createElement("label");
+      label.textContent = labelText;
+      const labelInput = document.createElement("input");
+      labelInput.value = template[labelProperty] ?? "";
+      const keyLabel = document.createElement("label");
+      keyLabel.textContent = `${labelText.replace(" label", "")} stable key`;
+      const keyInput = document.createElement("input");
+      keyInput.value = template[keyProperty] ?? "";
+      labelInput.addEventListener("input", () => {
+        const previousSlug = slugify(template[labelProperty]);
+        template[labelProperty] = labelInput.value;
+        if (!template[keyProperty] || template[keyProperty] === previousSlug) {
+          template[keyProperty] = slugify(labelInput.value);
+          keyInput.value = template[keyProperty];
+        }
+        renderTemplateWithoutEditor();
+      });
+      keyInput.addEventListener("input", () => {
+        template[keyProperty] = keyInput.value;
+        renderTemplateWithoutEditor();
+      });
+      label.append(labelInput);
+      keyLabel.append(keyInput);
+      wrapper.append(label, keyLabel);
+      return wrapper;
     }
 
     function templateField(template, labelText, property, hint = "", multiline = false) {
@@ -1016,7 +1079,7 @@
         return;
       }
       if (!state.templates.some((item) => item.id === playground.templateId)) playground.templateId = state.templates[0].id;
-      for (const template of state.templates) templateSelect.add(new Option(template.label, template.id));
+      for (const template of state.templates) templateSelect.add(new Option(`${template.categoryLabel} / ${template.subcategoryLabel} / ${template.label}`, template.id));
       templateSelect.value = playground.templateId;
       document.querySelector("#playgroundSeed").value = playground.seed;
       const template = state.templates.find((item) => item.id === playground.templateId);
@@ -1174,8 +1237,29 @@
         }
       };
       checkGroup(state.categories, "categories");
-      checkGroup(state.templates, "templates");
-      for (const template of state.templates) if (!template.text.trim()) errors.push(`${template.key || "template"} has no template text`);
+      const templateCategories = new Map();
+      for (const template of state.templates) {
+        for (const [value, context] of [
+          [template.categoryKey, "template category"],
+          [template.subcategoryKey, "template subcategory"],
+        ]) {
+          if (!value.trim()) errors.push(`${context} contains an empty key`);
+          if (value && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(value)) errors.push(`Key “${value}” must use letters, numbers, underscores, or hyphens`);
+        }
+        if (!template.categoryLabel.trim()) errors.push(`${template.categoryKey || "template category"} has no label`);
+        if (!template.subcategoryLabel.trim()) errors.push(`${template.subcategoryKey || "template subcategory"} has no label`);
+        const category = templateCategories.get(template.categoryKey) ?? new Map();
+        const group = category.get(template.subcategoryKey) ?? [];
+        group.push(template);
+        category.set(template.subcategoryKey, group);
+        templateCategories.set(template.categoryKey, category);
+        if (!template.text.trim()) errors.push(`${template.key || "template"} has no template text`);
+      }
+      for (const [categoryKey, subcategories] of templateCategories) {
+        for (const [subcategoryKey, templates] of subcategories) {
+          checkGroup(templates, `${categoryKey}/${subcategoryKey}`);
+        }
+      }
       for (const category of state.categories) {
         if (category.templateSlot && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(category.templateSlot)) errors.push(`Template slot “${category.templateSlot}” is invalid`);
         checkGroup(category.subcategories, category.key || "category");
@@ -1192,6 +1276,8 @@
         templates: data.templates.map((item) => {
           const variables = templateVariables(item.text);
           return {
+            categoryKey: item.categoryKey, categoryLabel: item.categoryLabel,
+            subcategoryKey: item.subcategoryKey, subcategoryLabel: item.subcategoryLabel,
             key: item.key, label: item.label, text: item.text,
             slots: Object.fromEntries(variables.map((variable) => [variable, item.slots?.[variable] || defaultSourceFor(variable)])),
             aliases: Object.fromEntries(variables.filter((variable) => String(item.aliases?.[variable] ?? "").trim()).map((variable) => [variable, item.aliases[variable].trim()])),
@@ -1219,21 +1305,34 @@
 
     function generateYaml() {
       sortState();
-      const lines = ["version: 2", "", "templates:"];
+      const lines = ["version: 3", "", "templates:"];
       if (!state.templates.length) lines.push("  {}");
+      const groupedTemplates = new Map();
       for (const template of state.templates) {
-        lines.push(`  ${keyLine(template.key)}:`, `    label: ${quote(template.label)}`);
-        const variables = templateVariables(template.text);
-        if (variables.length) {
-          lines.push("    slots:");
-          for (const variable of variables) lines.push(`      ${keyLine(variable)}: ${quote(template.slots?.[variable] || defaultSourceFor(variable))}`);
-          const aliased = variables.filter((variable) => String(template.aliases?.[variable] ?? "").trim());
-          if (aliased.length) {
-            lines.push("    aliases:");
-            for (const variable of aliased) lines.push(`      ${keyLine(variable)}: ${quote(template.aliases[variable].trim())}`);
+        if (!groupedTemplates.has(template.categoryKey)) groupedTemplates.set(template.categoryKey, { label: template.categoryLabel, subcategories: new Map() });
+        const category = groupedTemplates.get(template.categoryKey);
+        if (!category.subcategories.has(template.subcategoryKey)) category.subcategories.set(template.subcategoryKey, { label: template.subcategoryLabel, templates: [] });
+        category.subcategories.get(template.subcategoryKey).templates.push(template);
+      }
+      for (const [categoryKey, category] of groupedTemplates) {
+        lines.push(`  ${keyLine(categoryKey)}:`, `    label: ${quote(category.label)}`, "    subcategories:");
+        for (const [subcategoryKey, subcategory] of category.subcategories) {
+          lines.push(`      ${keyLine(subcategoryKey)}:`, `        label: ${quote(subcategory.label)}`, "        templates:");
+          for (const template of subcategory.templates) {
+            lines.push(`          ${keyLine(template.key)}:`, `            label: ${quote(template.label)}`);
+            const variables = templateVariables(template.text);
+            if (variables.length) {
+              lines.push("            slots:");
+              for (const variable of variables) lines.push(`              ${keyLine(variable)}: ${quote(template.slots?.[variable] || defaultSourceFor(variable))}`);
+              const aliased = variables.filter((variable) => String(template.aliases?.[variable] ?? "").trim());
+              if (aliased.length) {
+                lines.push("            aliases:");
+                for (const variable of aliased) lines.push(`              ${keyLine(variable)}: ${quote(template.aliases[variable].trim())}`);
+              }
+            }
+            lines.push("            template: |-", indentPrompt(template.text, 14));
           }
         }
-        lines.push("    template: |-", indentPrompt(template.text, 6));
       }
       lines.push("", "categories:");
       if (!state.categories.length) { lines.push("  {}"); return `${lines.join("\n")}\n`; }
@@ -1264,6 +1363,9 @@
       const lines = source.replace(/\r\n/g, "\n").split("\n");
       let section = null;
       let template = null;
+      let templateCategory = null;
+      let templateSubcategory = null;
+      let flatTemplate = false;
       let templateMapSection = null;
       let category = null;
       let subcategory = null;
@@ -1294,17 +1396,34 @@
           finishBlock();
         }
         if (!text || text.startsWith("#") || text.startsWith("version:")) continue;
-        if (text === "templates:") { section = "templates"; template = null; templateMapSection = null; category = subcategory = preset = null; continue; }
+        if (text === "templates:") { section = "templates"; template = templateCategory = templateSubcategory = null; flatTemplate = false; templateMapSection = null; category = subcategory = preset = null; continue; }
         if (text === "categories:") { section = "categories"; category = subcategory = preset = null; continue; }
 
         const keyMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*):$/);
         if (section === "templates" && indent === 2 && keyMatch) {
+          templateCategory = { key: keyMatch[1], label: keyMatch[1] };
+          templateSubcategory = null;
+          template = null;
+          flatTemplate = false;
+          templateMapSection = null;
+          continue;
+        }
+        if (section === "templates" && indent === 6 && keyMatch && templateCategory) {
+          templateSubcategory = { key: keyMatch[1], label: keyMatch[1] };
+          template = null;
+          continue;
+        }
+        if (section === "templates" && indent === 10 && keyMatch && templateCategory && templateSubcategory) {
           template = newTemplate(keyMatch[1]);
           template.key = keyMatch[1];
           template.autoKey = false;
           template.text = "";
           template.slots = {};
           template.aliases = {};
+          template.categoryKey = templateCategory.key;
+          template.categoryLabel = templateCategory.label;
+          template.subcategoryKey = templateSubcategory.key;
+          template.subcategoryLabel = templateSubcategory.label;
           data.templates.push(template);
           templateMapSection = null;
           continue;
@@ -1337,7 +1456,9 @@
         if (valueMatch) {
           const value = parseScalar(valueMatch[2]);
           if (valueMatch[1] === "label") {
-            if (section === "templates" && indent === 4 && template) template.label = value;
+            if (section === "templates" && indent === 4 && templateCategory) templateCategory.label = value;
+            if (section === "templates" && indent === 8 && templateSubcategory) templateSubcategory.label = value;
+            if (section === "templates" && indent === 12 && template) template.label = value;
             if (section === "categories" && indent === 4 && category) category.label = value;
             if (section === "categories" && indent === 8 && subcategory) subcategory.label = value;
             if (section === "categories" && indent === 12 && preset) preset.label = value;
@@ -1353,11 +1474,30 @@
           continue;
         }
 
-        if (section === "templates" && indent === 4 && (text === "slots:" || text === "aliases:") && template) {
+        // Flat schema-v2 import: a top-level template reveals itself when one
+        // of its template-only fields appears beneath the top-level key.
+        if (section === "templates" && indent === 4 && templateCategory && (text === "slots:" || text === "aliases:" || /^template:\s*[>|]/.test(text))) {
+          if (!flatTemplate) {
+            template = newTemplate(templateCategory.key);
+            template.key = templateCategory.key;
+            template.label = templateCategory.label;
+            template.autoKey = false;
+            template.text = "";
+            template.slots = {};
+            template.aliases = {};
+            template.categoryKey = "general";
+            template.categoryLabel = "General";
+            template.subcategoryKey = "general";
+            template.subcategoryLabel = "General";
+            data.templates.push(template);
+            flatTemplate = true;
+          }
+        }
+        if (section === "templates" && ((flatTemplate && indent === 4) || (!flatTemplate && indent === 12)) && (text === "slots:" || text === "aliases:") && template) {
           templateMapSection = text.slice(0, -1);
           continue;
         }
-        if (section === "templates" && indent === 6 && templateMapSection && template) {
+        if (section === "templates" && ((flatTemplate && indent === 6) || (!flatTemplate && indent === 14)) && templateMapSection && template) {
           const mappingMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/);
           if (mappingMatch) {
             template[templateMapSection][mappingMatch[1]] = parseScalar(mappingMatch[2]);
@@ -1365,8 +1505,8 @@
           }
         }
 
-        if (section === "templates" && indent === 4 && /^template:\s*[>|]/.test(text) && template) {
-          blockTarget = template; blockProperty = "text"; blockIndent = 6; blockLines = [];
+        if (section === "templates" && ((flatTemplate && indent === 4) || (!flatTemplate && indent === 12)) && /^template:\s*[>|]/.test(text) && template) {
+          blockTarget = template; blockProperty = "text"; blockIndent = flatTemplate ? 6 : 14; blockLines = [];
           continue;
         }
         if (indent === 12 && /^prompt:\s*[>|]/.test(text) && preset) {
@@ -1404,6 +1544,18 @@
     document.querySelector("#addPreset").addEventListener("click", addPreset);
     document.querySelector("#addTemplate").addEventListener("click", () => {
       const template = newTemplate();
+      const current = selectedTemplate();
+      if (current) {
+        template.categoryKey = current.categoryKey;
+        template.categoryLabel = current.categoryLabel;
+        template.subcategoryKey = current.subcategoryKey;
+        template.subcategoryLabel = current.subcategoryLabel;
+      }
+      const used = new Set(state.templates
+        .filter((item) => item.categoryKey === template.categoryKey && item.subcategoryKey === template.subcategoryKey)
+        .map((item) => item.key));
+      let suffix = 2;
+      while (used.has(template.key)) template.key = `new_template_${suffix++}`;
       state.templates.push(template);
       templateSelection = template.id;
       playground.templateId = template.id;

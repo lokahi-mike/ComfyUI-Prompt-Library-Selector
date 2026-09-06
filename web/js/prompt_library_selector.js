@@ -257,8 +257,12 @@ function bundleSegmentsFromSelector(node, visited = new Set()) {
 }
 
 function liveTemplateAssembly(node) {
+    const categoryKey = node.widgets?.find((widget) => widget.name === "template_category")?.value;
+    const subcategoryKey = node.widgets?.find((widget) => widget.name === "template_subcategory")?.value;
     const templateKey = node.widgets?.find((widget) => widget.name === "template")?.value;
-    const template = node._promptLibraryTemplates?.find((item) => item.key === templateKey);
+    const category = node._promptLibraryTemplates?.find((item) => item.key === categoryKey);
+    const subcategory = category?.subcategories?.find((item) => item.key === subcategoryKey);
+    const template = subcategory?.templates?.find((item) => item.key === templateKey);
     const override = String(node.widgets?.find((widget) => widget.name === "template_override")?.value ?? "").trim();
     let text = override || template?.template || "";
     const input = node.inputs?.find((item) => item.name === "bundle_in");
@@ -308,9 +312,45 @@ function liveTemplateAssembly(node) {
 async function setupTemplateComposer(node) {
     if (node._promptLibraryTemplateComposerReady) return;
     node._promptLibraryTemplateComposerReady = true;
+    const categoryWidget = node.widgets?.find((widget) => widget.name === "template_category");
+    const subcategoryWidget = node.widgets?.find((widget) => widget.name === "template_subcategory");
     const templateWidget = node.widgets?.find((widget) => widget.name === "template");
     const overrideWidget = node.widgets?.find((widget) => widget.name === "template_override");
-    if (!templateWidget || !overrideWidget) return;
+    if (!categoryWidget || !subcategoryWidget || !templateWidget || !overrideWidget) return;
+
+    const selectedTemplate = () => {
+        const category = node._promptLibraryTemplates?.find(
+            (item) => item.key === categoryWidget.value,
+        );
+        const subcategory = category?.subcategories?.find(
+            (item) => item.key === subcategoryWidget.value,
+        );
+        return subcategory?.templates?.find((item) => item.key === templateWidget.value);
+    };
+
+    const updateTemplate = () => {
+        const category = node._promptLibraryTemplates?.find(
+            (item) => item.key === categoryWidget.value,
+        );
+        const subcategory = category?.subcategories?.find(
+            (item) => item.key === subcategoryWidget.value,
+        );
+        retainOrNone(templateWidget, subcategory?.templates ?? []);
+        node._updatePromptLibraryLivePreview?.();
+    };
+
+    const updateSubcategory = () => {
+        const category = node._promptLibraryTemplates?.find(
+            (item) => item.key === categoryWidget.value,
+        );
+        retainOrNone(subcategoryWidget, category?.subcategories ?? []);
+        updateTemplate();
+    };
+
+    const updateCategory = () => {
+        retainOrNone(categoryWidget, node._promptLibraryTemplates ?? []);
+        updateSubcategory();
+    };
 
     const container = document.createElement("div");
     container.style.display = "grid";
@@ -360,17 +400,19 @@ async function setupTemplateComposer(node) {
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Unable to load prompt library");
             node._promptLibraryTemplates = data.templates ?? [];
-            retainOrNone(templateWidget, node._promptLibraryTemplates);
+            updateCategory();
         } catch (error) {
             console.error("Prompt Library Template Composer:", error);
             node._promptLibraryTemplates = [];
-            retainOrNone(templateWidget, []);
+            updateCategory();
         }
         node._updatePromptLibraryLivePreview();
         node.setDirtyCanvas(true, true);
     };
 
     for (const [name, label] of [
+        ["template_category", "Template category"],
+        ["template_subcategory", "Template subcategory"],
         ["template", "Template"],
         ["template_override", "Editable template override"],
         ["pre_text", "Pre-text"],
@@ -385,9 +427,12 @@ async function setupTemplateComposer(node) {
             node._updatePromptLibraryLivePreview();
         };
     }
+    categoryWidget.callback = () => { overrideWidget.value = ""; updateSubcategory(); };
+    subcategoryWidget.callback = () => { overrideWidget.value = ""; updateTemplate(); };
+    templateWidget.callback = () => { overrideWidget.value = ""; node._updatePromptLibraryLivePreview(); };
 
     node.addWidget("button", "Load selected template for editing", null, () => {
-        const selected = node._promptLibraryTemplates?.find((item) => item.key === templateWidget.value);
+        const selected = selectedTemplate();
         overrideWidget.value = selected?.template ?? "";
         node._updatePromptLibraryLivePreview();
         node.setDirtyCanvas(true, true);
