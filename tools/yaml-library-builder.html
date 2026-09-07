@@ -46,6 +46,7 @@
 
     button:hover { border-color: var(--accent); }
     button.primary { background: var(--accent); border-color: var(--accent); color: #21131a; font-weight: 750; }
+    button:disabled { cursor: not-allowed; opacity: .42; border-color: var(--line); }
     button.danger { color: #ffd8da; border-color: rgba(239, 111, 117, .55); }
     button.ghost { background: transparent; }
     button.compact { padding: .34rem .52rem; font-size: .74rem; }
@@ -198,6 +199,24 @@
     .output-stack textarea:first-of-type { min-height: 18rem; }
     .toolbar-row { display: flex; flex-wrap: wrap; gap: .45rem; align-items: end; }
     .toolbar-row label { min-width: 10rem; flex: 1; }
+    dialog {
+      width: min(52rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 2rem);
+      padding: 0;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+    }
+    dialog::backdrop { background: rgba(5, 5, 8, .78); backdrop-filter: blur(4px); }
+    .dialog-body { padding: 1rem; display: grid; gap: .9rem; overflow: auto; }
+    .dialog-body textarea { min-height: 18rem; font: 12.5px/1.5 "Cascadia Code", Consolas, monospace; }
+    .dialog-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .55rem; }
+    .dialog-actions > div { display: flex; flex-wrap: wrap; gap: .55rem; }
+    .import-preview { border: 1px solid var(--line); border-radius: 10px; padding: .75rem; color: var(--muted); font-size: .78rem; line-height: 1.55; white-space: pre-wrap; }
+    .import-preview.good { border-color: rgba(114, 211, 161, .38); color: var(--good); }
+    .import-preview.bad { border-color: rgba(239, 111, 117, .55); color: #ffb8bc; }
 
     @media (max-width: 1050px) {
       main { grid-template-columns: minmax(220px, .8fr) minmax(340px, 1.2fr); }
@@ -221,6 +240,7 @@
     <div class="actions">
       <button id="newButton" class="ghost">New library</button>
       <button id="importButton">Import YAML</button>
+      <button id="importSectionsButton">Import sections</button>
       <input id="fileInput" type="file" accept=".yml,.yaml,text/yaml">
       <button id="copyButton">Copy YAML</button>
       <button id="downloadButton" class="primary">Download YAML</button>
@@ -317,6 +337,19 @@
       </div>
     </section>
   </main>
+
+  <dialog id="sectionImportDialog">
+    <div class="panel-head"><h2>Import AI-created sections</h2><span class="privacy">JSON is merged; your library is not replaced</span></div>
+    <div class="dialog-body">
+      <p class="hint">Paste one item or an <code>items</code> array. Missing categories and subcategories are created automatically. Existing item keys are skipped rather than overwritten.</p>
+      <label>Import packet<textarea id="sectionImportText" spellcheck="false" placeholder='{"type":"preset","category":"Lighting","subcategory":"Neon","label":"Rainy Neon","prompt":"..."}'></textarea></label>
+      <div id="sectionImportPreview" class="import-preview">Paste JSON, then preview the import.</div>
+      <div class="dialog-actions">
+        <div><button id="sectionImportExample" class="ghost">Insert example</button><button id="sectionImportPreviewButton">Preview</button></div>
+        <div><button id="sectionImportCancel" class="ghost">Cancel</button><button id="sectionImportApply" class="primary" disabled>Import valid items</button></div>
+      </div>
+    </div>
+  </dialog>
 
   <script>
     const STORAGE_KEY = "prompt-library-yaml-builder-v1";
@@ -1335,6 +1368,160 @@
       savePlayground();
     }
 
+    const IMPORT_EXAMPLE = {
+      items: [
+        {
+          type: "preset",
+          category: { key: "lighting", label: "Lighting", template_slot: "lighting" },
+          subcategory: { key: "neon", label: "Neon" },
+          key: "rainy_neon", label: "Rainy Neon",
+          prompt: "Soft cyan and magenta neon reflects across rain-damp surfaces.",
+          negative_prompt: "flat lighting", tags: ["night", "neon"]
+        },
+        {
+          type: "template",
+          category: { key: "solo", label: "Solo" },
+          subcategory: { key: "cinematic", label: "Cinematic" },
+          key: "simple_portrait", label: "Simple Portrait",
+          slots: { character_a: "character", outfit_a: "outfit", lighting: "lighting" },
+          aliases: { character_a: "Character A", outfit_a: "Character A" },
+          template: "{{character_a}}\n\n{{outfit_a}}\n\n{{lighting}}"
+        }
+      ]
+    };
+
+    function importTarget(value, fallbackLabel) {
+      const source = typeof value === "string" ? { label: value } : (value && typeof value === "object" ? value : {});
+      const label = String(source.label || source.name || fallbackLabel).trim();
+      return {
+        key: String(source.key || source.stable_key || slugify(label)).trim(),
+        label,
+        templateSlot: String(source.template_slot || source.templateSlot || "").trim(),
+        tags: Array.isArray(source.tags) ? source.tags.map(String) : splitTags(source.tags),
+      };
+    }
+
+    function parseImportPacket(source) {
+      let parsed;
+      try { parsed = JSON.parse(source); }
+      catch (error) { throw new Error("Invalid JSON: " + error.message); }
+      const rawItems = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.items) ? parsed.items : [parsed]);
+      if (!rawItems.length) throw new Error("The import packet contains no items.");
+      return rawItems.map((raw, index) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Item " + (index + 1) + " must be an object.");
+        const type = String(raw.type || raw.kind || "preset").toLowerCase();
+        if (!["preset", "snippet", "template"].includes(type)) throw new Error("Item " + (index + 1) + " has unsupported type \"" + type + "\".");
+        const isTemplate = type === "template";
+        const category = importTarget(raw.category, isTemplate ? "Imported Templates" : "Imported");
+        const subcategory = importTarget(raw.subcategory, "Imported");
+        const label = String(raw.label || raw.name || "").trim();
+        const key = String(raw.key || raw.stable_key || slugify(label)).trim();
+        if (!label) throw new Error("Item " + (index + 1) + " needs a label.");
+        if (!key || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(key)) throw new Error("Item " + (index + 1) + " has invalid key \"" + key + "\".");
+        if (!category.key || !subcategory.key) throw new Error("Item " + (index + 1) + " needs valid category and subcategory names or keys.");
+        if (isTemplate) {
+          const text = String(raw.template ?? raw.text ?? "");
+          if (!text.trim()) throw new Error("Template \"" + label + "\" has no template text.");
+          return { type: "template", category, subcategory, key, label, text, slots: raw.slots || {}, aliases: raw.aliases || {} };
+        }
+        const prompt = String(raw.prompt ?? raw.positive_prompt ?? raw.positive ?? "");
+        if (!prompt.trim()) throw new Error("Preset \"" + label + "\" has no prompt text.");
+        return {
+          type: "preset", category, subcategory, key, label, prompt,
+          negativePrompt: String(raw.negative_prompt ?? raw.negativePrompt ?? raw.negative ?? ""),
+          templateSlot: String(raw.template_slot ?? raw.templateSlot ?? "").trim(),
+          tags: Array.isArray(raw.tags) ? raw.tags.map(String) : splitTags(raw.tags),
+        };
+      });
+    }
+
+    function importItemPath(item) {
+      return item.type + ":" + item.category.key + "/" + item.subcategory.key + "/" + item.key;
+    }
+
+    function existingImportPaths() {
+      const paths = new Set();
+      for (const category of state.categories) for (const subcategory of category.subcategories) for (const preset of subcategory.presets) {
+        paths.add("preset:" + category.key + "/" + subcategory.key + "/" + preset.key);
+      }
+      for (const category of state.templateCategories) for (const subcategory of category.subcategories) for (const template of subcategory.templates) {
+        paths.add("template:" + category.key + "/" + subcategory.key + "/" + template.key);
+      }
+      return paths;
+    }
+
+    function analyzeImport(items) {
+      const occupied = existingImportPaths();
+      const valid = [];
+      const skipped = [];
+      for (const item of items) {
+        const path = importItemPath(item);
+        if (occupied.has(path)) skipped.push({ item, reason: "duplicate key" });
+        else { occupied.add(path); valid.push(item); }
+      }
+      return { valid, skipped };
+    }
+
+    function findOrCreateCategory(item) {
+      const groups = item.type === "template" ? state.templateCategories : state.categories;
+      let category = groups.find((entry) => entry.key === item.category.key);
+      if (!category) {
+        category = item.type === "template" ? newTemplateCategory(item.category.label) : newCategory(item.category.label);
+        category.key = item.category.key; category.autoKey = false;
+        if (item.type === "preset") {
+          category.templateSlot = item.category.templateSlot;
+          category.tags = item.category.tags;
+        }
+        groups.push(category);
+      }
+      let subcategory = category.subcategories.find((entry) => entry.key === item.subcategory.key);
+      if (!subcategory) {
+        subcategory = item.type === "template" ? newTemplateSubcategory(item.subcategory.label) : newSubcategory(item.subcategory.label);
+        subcategory.key = item.subcategory.key; subcategory.autoKey = false;
+        if (item.type === "preset") subcategory.tags = item.subcategory.tags;
+        category.subcategories.push(subcategory);
+      }
+      return { category, subcategory };
+    }
+
+    function applyImport(items) {
+      for (const item of items) {
+        const { category, subcategory } = findOrCreateCategory(item);
+        if (item.type === "template") {
+          const template = newTemplate(item.label);
+          Object.assign(template, { key: item.key, autoKey: false, text: item.text, slots: item.slots, aliases: item.aliases });
+          subcategory.templates.push(template);
+          templateSelection = { type: "template", id: template.id };
+        } else {
+          const preset = newPreset(item.label);
+          Object.assign(preset, { key: item.key, autoKey: false, prompt: item.prompt, negativePrompt: item.negativePrompt, templateSlot: item.templateSlot, tags: item.tags });
+          subcategory.presets.push(preset);
+          selection = { type: "preset", id: preset.id };
+        }
+        expandedIds.add(category.id); expandedIds.add(subcategory.id);
+      }
+    }
+
+    function previewSectionImport() {
+      const preview = document.querySelector("#sectionImportPreview");
+      const apply = document.querySelector("#sectionImportApply");
+      try {
+        const items = parseImportPacket(document.querySelector("#sectionImportText").value);
+        const analysis = analyzeImport(items);
+        apply._items = analysis.valid;
+        apply.disabled = !analysis.valid.length;
+        const lines = analysis.valid.map((item) => "ADD  " + item.type + "  " + item.category.label + " → " + item.subcategory.label + " → " + item.label);
+        lines.push(...analysis.skipped.map(({ item }) => "SKIP " + item.type + "  " + item.category.label + " → " + item.subcategory.label + " → " + item.label + " (duplicate key)"));
+        lines.push("", analysis.valid.length + " ready to import · " + analysis.skipped.length + " skipped");
+        preview.className = "import-preview " + (analysis.valid.length ? "good" : "bad");
+        preview.textContent = lines.join("\n");
+      } catch (error) {
+        apply._items = []; apply.disabled = true;
+        preview.className = "import-preview bad";
+        preview.textContent = error.message;
+      }
+    }
+
     function addCategory() {
       const item = newCategory();
       state.categories.push(item);
@@ -1806,6 +1993,37 @@
       state = blankState(); selection = null; templateSelection = null; expandedIds.clear(); playground = { templateId: null, seed: 1, selections: {}, overrides: {} }; render();
     });
     document.querySelector("#importButton").addEventListener("click", () => document.querySelector("#fileInput").click());
+    document.querySelector("#importSectionsButton").addEventListener("click", () => {
+      const dialog = document.querySelector("#sectionImportDialog");
+      document.querySelector("#sectionImportText").value = "";
+      document.querySelector("#sectionImportPreview").className = "import-preview";
+      document.querySelector("#sectionImportPreview").textContent = "Paste JSON, then preview the import.";
+      document.querySelector("#sectionImportApply")._items = [];
+      document.querySelector("#sectionImportApply").disabled = true;
+      dialog.showModal();
+    });
+    document.querySelector("#sectionImportExample").addEventListener("click", () => {
+      document.querySelector("#sectionImportText").value = JSON.stringify(IMPORT_EXAMPLE, null, 2);
+      previewSectionImport();
+    });
+    document.querySelector("#sectionImportPreviewButton").addEventListener("click", previewSectionImport);
+    document.querySelector("#sectionImportText").addEventListener("input", previewSectionImport);
+    document.querySelector("#sectionImportCancel").addEventListener("click", () => document.querySelector("#sectionImportDialog").close());
+    document.querySelector("#sectionImportApply").addEventListener("click", (event) => {
+      const items = event.currentTarget._items || [];
+      if (!items.length) return;
+      applyImport(items);
+      document.querySelector("#sectionImportDialog").close();
+      activeView = items.some((item) => item.type === "template") && !items.some((item) => item.type === "preset") ? "templates" : "library";
+      document.querySelectorAll(".tabs button").forEach((button) => button.classList.toggle("active", button.dataset.view === activeView));
+      document.querySelector("#libraryView").hidden = activeView !== "library";
+      document.querySelector("#templatesView").hidden = activeView !== "templates";
+      document.querySelector("#playgroundView").hidden = activeView !== "playground";
+      render();
+      const status = document.querySelector("#status");
+      status.className = "status good";
+      status.textContent = items.length + " imported section" + (items.length === 1 ? "" : "s") + ". Download YAML when ready.";
+    });
     document.querySelector("#fileInput").addEventListener("change", async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;

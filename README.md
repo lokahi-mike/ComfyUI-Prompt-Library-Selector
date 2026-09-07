@@ -176,6 +176,21 @@ same hierarchy used by the snippet library. A two-character template simply
 uses separate variables such as `character_a`, `character_b`, `outfit_a`, and
 `outfit_b`.
 
+### Import AI-created sections
+
+Use **Import sections** to paste a small JSON packet produced by ChatGPT or
+another assistant. Unlike **Import YAML**, this merges new presets and templates
+into the current workbench instead of replacing the complete library. The
+preview shows the destination of every item before import. Missing categories
+and subcategories are created automatically; duplicate item keys in the same
+destination are safely skipped rather than overwritten.
+
+The importer accepts one object, an array, or an object containing an `items`
+array. Use `type: "preset"` for a library snippet and `type: "template"` for a
+complete prompt framework. Category and subcategory may be friendly-name
+strings or objects with explicit `key` and `label` values. Click **Insert
+example** in the dialog for a copyable packet containing both forms.
+
 The **Prompt Playground** fills those variables from the library and displays the final
 positive prompt, combined negative prompt, and deduplicated metadata tags. It
 also supports reproducible seeded random choices and temporary per-variable
