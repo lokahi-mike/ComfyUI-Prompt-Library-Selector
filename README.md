@@ -110,6 +110,24 @@ python -m pip install -r requirements.txt
 Restart ComfyUI and hard-refresh the browser after Python or frontend updates.
 YAML-only changes do not require a restart—use **Refresh library** on a node.
 
+### Library file location
+
+Keep your editable library in ComfyUI's user directory:
+
+```text
+ComfyUI/user/prompt_library_selector/prompt_library.yml
+```
+
+ComfyUI's `--user-directory` setting is respected automatically, so a relocated
+user folder works without additional configuration. Create the
+`prompt_library_selector` folder, copy your current `prompt_library.yml` into
+it, and restart ComfyUI once after creating the user copy.
+
+If that user-owned file does not exist, the node falls back to the example
+`prompt_library.yml` bundled in its custom-node directory. This gives new
+installations working examples while preventing later git pulls, reinstalls,
+or upgrades from overwriting your real library.
+
 ## Quick start
 
 ### 1. Build or edit your library
@@ -125,7 +143,8 @@ open `tools/yaml-library-builder.html` directly for completely offline use.
 
 Create presets under **Library**, create a framework under **Templates**, and
 use **Prompt Playground** to verify the assembled result. Download the generated
-YAML as `prompt_library.yml` and place it in this custom-node folder.
+YAML as `prompt_library.yml` and place it in
+`ComfyUI/user/prompt_library_selector/`.
 
 The Workbench deliberately does not overwrite server files. Its working state
 is stored in that browser, and **Download YAML** or **Copy YAML** gives you the
@@ -251,6 +270,28 @@ chain passes through unchanged.
 
 The individual STRING outputs are useful for inspection and conditional
 workflows. Normal template workflows primarily use `bundle`.
+
+## Filenames and prompt packets
+
+**Prompt Library Filename Builder** turns a resolved-name chain into a portable
+filename stem. It removes filesystem-hostile punctuation, normalizes accented
+characters, supports a prefix and suffix, optionally adds the seed, and limits
+the result to a configurable safe length. If `resolved_names` is empty, its
+output is empty—even when a prefix or seed is configured—so an empty selection
+cannot create a misleading filename.
+
+**Prompt Library Prompt Packet** collects the positive prompt, optional negative
+prompt, resolved names, filename stem, seed, and notes. Choose formatted JSON
+for metadata and automation, or Plain text for a readable sidecar file. Its
+`prompt_packet` output is an ordinary STRING that can feed Save Text nodes or
+image-metadata nodes.
+
+```text
+resolved_preset_name ──► Filename Builder ──► filename_stem
+                                │
+Composer positive/negative ─────┼──► Prompt Packet ──► Save Text / metadata
+resolved names + seed ──────────┘
+```
 
 ## Prompt Library Workbench
 

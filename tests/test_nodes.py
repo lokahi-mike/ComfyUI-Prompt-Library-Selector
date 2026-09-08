@@ -158,6 +158,50 @@ class NodeIntegrationTests(unittest.TestCase):
         self.assertEqual(second, "Alpha + Beta")
         self.assertEqual(skipped, "Alpha + Beta")
 
+    def test_filename_builder_sanitizes_names_and_can_include_seed(self):
+        result = self.nodes.PromptLibraryFilenameBuilder().build_filename(
+            "Alpha, Bé / Beta", separator="_", include_seed=True, seed=42,
+            prefix="portrait", suffix="final",
+        )[0]
+        self.assertEqual(result, "portrait_Alpha_Be_Beta_final_seed-42")
+
+    def test_filename_builder_returns_empty_without_resolved_names(self):
+        result = self.nodes.PromptLibraryFilenameBuilder().build_filename(
+            "", prefix="portrait", include_seed=True, seed=42,
+        )[0]
+        self.assertEqual(result, "")
+
+    def test_prompt_packet_outputs_json_and_plain_text(self):
+        packet_node = self.nodes.PromptLibraryPromptPacket()
+        json_packet = packet_node.build_packet(
+            "A positive prompt.", "JSON", 42, "bad anatomy",
+            "Alpha + Beta", "alpha_beta_seed-42",
+        )[0]
+        payload = __import__("json").loads(json_packet)
+        self.assertEqual(payload["resolved_names"], "Alpha + Beta")
+        self.assertEqual(payload["seed"], 42)
+        plain_packet = packet_node.build_packet(
+            "A positive prompt.", "Plain text", 42,
+        )[0]
+        self.assertIn("[POSITIVE PROMPT]\nA positive prompt.", plain_packet)
+        self.assertNotIn("[NEGATIVE PROMPT]", plain_packet)
+
+    def test_user_library_is_preferred_with_builtin_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                self.nodes.preferred_library_path(directory),
+                self.nodes.BUILTIN_LIBRARY_PATH,
+            )
+            user_library = (
+                Path(directory) / "prompt_library_selector" /
+                "prompt_library.yml"
+            )
+            user_library.parent.mkdir(parents=True)
+            user_library.write_text(SAMPLE, encoding="utf-8")
+            self.assertEqual(
+                self.nodes.preferred_library_path(directory), user_library
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
