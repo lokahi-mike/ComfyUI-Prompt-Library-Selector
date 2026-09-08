@@ -84,8 +84,10 @@ const subgraphWidgetSnapshots = new WeakMap();
 
 function refreshWhenSubgraphWidgetsChange() {
     let changed = false;
+    let hasSubgraphs = false;
     visitGraphNodes(rootGraph(), (node) => {
         if (!node.subgraph) return;
+        hasSubgraphs = true;
         syncPromotedSelectorWidgets(node);
         const snapshot = JSON.stringify((node.widgets ?? []).map((widget) => [
             widget.widgetId ?? widget.name,
@@ -95,7 +97,10 @@ function refreshWhenSubgraphWidgetsChange() {
         subgraphWidgetSnapshots.set(node, snapshot);
         if (previous !== undefined && previous !== snapshot) changed = true;
     });
-    if (changed) refreshComposerPreviews();
+    // Promoted widget values live in ComfyUI's host-scoped store and do not
+    // consistently produce callbacks. While subgraphs exist, keep Composer
+    // requirements authoritative even when no observable widget changed.
+    if (changed || hasSubgraphs) refreshComposerPreviews();
 }
 
 // Current ComfyUI promoted widgets are host-owned and do not consistently invoke
@@ -405,13 +410,21 @@ function promotedWidgetValues(subgraphNode, inheritedOverrides) {
     return valuesByNode;
 }
 
-function bundleSegmentsFromSource(node, outputSlot, visited = new Set(), overrideContext) {
+function markBundleNodeVisited(visited, node, overrideContext) {
+    const scope = overrideContext?.hostNode ?? node.graph ?? node;
+    if (!visited.has(node)) visited.set(node, new Set());
+    const scopes = visited.get(node);
+    if (scopes.has(scope)) return true;
+    scopes.add(scope);
+    return false;
+}
+
+function bundleSegmentsFromSource(node, outputSlot, visited = new Map(), overrideContext) {
     if (!node) return [];
     if (node.comfyClass === NODE_TYPE) {
         return bundleSegmentsFromSelector(node, visited, overrideContext);
     }
-    if (!node.subgraph || visited.has(node)) return [];
-    visited.add(node);
+    if (!node.subgraph || markBundleNodeVisited(visited, node, overrideContext)) return [];
     const boundarySlot = node.subgraph.outputNode?.slots?.[outputSlot];
     const internalLinkId = boundarySlot?.linkIds?.[0];
     const internalLink = internalLinkId != null
@@ -421,6 +434,8 @@ function bundleSegmentsFromSource(node, outputSlot, visited = new Set(), overrid
         ? graphNode(node.subgraph, internalLink.origin_id)
         : null;
     const nestedContext = promotedWidgetValues(node, overrideContext?.get(node));
+    nestedContext.hostNode = node;
+    nestedContext.parentContext = overrideContext;
     return internalSource
         ? bundleSegmentsFromSource(
             internalSource, internalLink.origin_slot, visited, nestedContext,
@@ -428,18 +443,35 @@ function bundleSegmentsFromSource(node, outputSlot, visited = new Set(), overrid
         : [];
 }
 
-function bundleSegmentsFromSelector(node, visited = new Set(), overrideContext) {
-    if (!node || visited.has(node)) return [];
-    visited.add(node);
+function bundleSegmentsFromSelector(node, visited = new Map(), overrideContext) {
+    if (!node || markBundleNodeVisited(visited, node, overrideContext)) return [];
     const segments = [];
     const graph = node.graph ?? activeGraph();
     const bundleInput = node.inputs?.find((input) => input.name === "bundle_in");
     if (bundleInput?.link != null) {
         const link = graphLink(graph, bundleInput.link);
         const source = link ? graphNode(graph, link.origin_id) : null;
-        segments.push(...bundleSegmentsFromSource(
-            source, link?.origin_slot, visited, overrideContext,
-        ));
+        if (
+            link && String(link.origin_id) === String(graph.inputNode?.id)
+        ) {
+            const hostNode = overrideContext?.hostNode;
+            const hostInput = hostNode?.inputs?.[link.origin_slot];
+            const parentGraph = hostNode?.graph;
+            const parentLink = hostInput?.link != null
+                ? graphLink(parentGraph, hostInput.link)
+                : null;
+            const parentSource = parentLink
+                ? graphNode(parentGraph, parentLink.origin_id)
+                : null;
+            segments.push(...bundleSegmentsFromSource(
+                parentSource, parentLink?.origin_slot, visited,
+                overrideContext?.parentContext,
+            ));
+        } else if (source) {
+            segments.push(...bundleSegmentsFromSource(
+                source, link.origin_slot, visited, overrideContext,
+            ));
+        }
     }
     const segment = selectedLibraryEntry(node, overrideContext?.get(node));
     if (segment.positive || segment.negative || segment.tags?.length) segments.push(segment);
