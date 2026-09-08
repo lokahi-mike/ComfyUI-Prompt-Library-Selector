@@ -90,15 +90,15 @@ normalizes excess blank lines, and exposes a read-only live preview in the
 frontend before queueing. It must not silently rewrite the prose or call an
 online prompt expander.
 
-## Krea 2 Turbo behavior
+## Model-agnostic behavior
 
-- Treat the positive prompt as the primary artifact sent directly to the local
-  Qwen3VL text encoder.
-- Preserve negative prompts for compatibility, but clearly describe that the
-  recommended eight-step Turbo workflow runs with CFG disabled.
-- Keep sampler settings, resolution, LoRAs, and style-reference conditioning
-  outside the text bundle.
-- Do not imitate Krea's hosted creativity sliders or prompt-expansion service.
+- Keep prompt storage and composition independent of any particular checkpoint,
+  text encoder, sampler, or hosted generation service.
+- Expose assembled text without silently rewriting it for a specific model.
+- Preserve negative prompts for workflows that use them without assuming every
+  model or guidance configuration will consume them.
+- Keep model-specific prompting choices in library content and user workflows,
+  not in the node contract.
 
 ## Implementation order used
 

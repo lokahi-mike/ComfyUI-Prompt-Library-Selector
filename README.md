@@ -76,7 +76,7 @@ of hunting through workflows.
 - Live generated YAML with internal round-trip validation
 - Prompt Playground for testing complete assembled prompts offline
 - Seeded Random testing and temporary per-variable overrides
-- Advisory checks for modular, natural-language Krea 2 Turbo prompts
+- Model-neutral checks for modular, cleanly assembled prompts
 - Safe JSON import packets for prompt sections created by an AI
 - Browser-local autosave, with no analytics or external service calls
 
@@ -286,10 +286,11 @@ Temporary overrides let you experiment without modifying the library. **Load
 selected text** copies a preset into the override editor; **Use library
 original** discards the temporary edit.
 
-The Krea 2 Turbo advisory checks flag common composition problems such as fixed
+The model-neutral advisory checks flag common composition problems such as fixed
 legacy aliases, missing `{{subject}}` placeholders, unresolved variables,
-duplicated paragraphs, unnecessary modular section headings, and sentence
-fragments. These are warnings only—the Workbench never rewrites your prose.
+duplicated paragraphs, redundant modular section headings, and sentence
+fragments. These are warnings only—the Workbench never rewrites your prose or
+dictates a particular prompting style.
 
 ### Import AI-created sections
 
@@ -411,11 +412,11 @@ versioned with Git. A database is not required for ordinary-sized libraries.
 This is intentional. Use **Download YAML** and replace the file yourself. Keep a
 backup if the library contains important custom work.
 
-### Negative prompts seem ineffective in Krea 2 Turbo
+### Negative prompts seem ineffective
 
-Negative prompts are preserved for compatibility. Workflows running Turbo with
-CFG disabled may not use them, so essential constraints should also be phrased
-positively in the main prompt.
+Negative-prompt behavior depends on the model, text encoder, sampler, guidance
+configuration, and workflow. The selector and Composer preserve and combine the
+text, but your generation pipeline determines whether and how it is used.
 
 ## Compatibility
 

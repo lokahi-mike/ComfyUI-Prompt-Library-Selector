@@ -331,7 +331,7 @@
     <section class="panel preview-panel" style="grid-column: span 2">
       <div class="panel-head"><h2>Live Output</h2><span id="playgroundStatus" class="privacy"></span></div>
       <div class="panel-body output-stack">
-        <div id="playgroundGuidance" class="guidance good">Krea 2 Turbo prompt check is ready.</div>
+        <div id="playgroundGuidance" class="guidance good">Prompt assembly check is ready.</div>
         <label>Positive prompt<textarea id="playgroundPositive" readonly></textarea></label>
         <label>Negative prompt<textarea id="playgroundNegative" readonly></textarea></label>
         <label>Metadata tags<textarea id="playgroundTags" readonly></textarea></label>
@@ -712,9 +712,9 @@
       metadata.append(field("Tags", "tags", found.item.tags.join(", "), "Currently preserved in YAML for future use; tags do not affect selectors or prompts."));
       form.append(metadata);
       if (selection.type === "preset") {
-        form.append(field("Prompt", "prompt", found.item.prompt, "For Krea 2 Turbo, use complete natural sentences. Subject-specific presets should use {{subject}} instead of a fixed character name.", true));
+        form.append(field("Prompt", "prompt", found.item.prompt, "Use wording appropriate for your target model. Subject-specific presets should use {{subject}} instead of a fixed character name.", true));
         const guidance = document.createElement("div"); guidance.id = "presetGuidance"; form.append(guidance);
-        form.append(field("Negative prompt", "negativePrompt", found.item.negativePrompt, "Stored for compatibility. Krea 2 Turbo normally runs with CFG disabled, so express critical constraints positively in the main prompt.", true));
+        form.append(field("Negative prompt", "negativePrompt", found.item.negativePrompt, "Stored and composed separately for models and workflows that support negative conditioning.", true));
         form.append(field("Template slot override", "templateSlot", found.item.templateSlot, "Optional {{variable}} name for this preset; otherwise the category default is used."));
         queueMicrotask(updatePresetGuidance);
       }
@@ -771,9 +771,9 @@
       const messages = [];
       if (/\b(?:female|male|subject|character)\s+[A-Z]\b:?/i.test(prompt)) messages.push("Replace fixed aliases such as “Female A” or “Character A” with {{subject}} so the same preset can serve any character slot.");
       if (["character", "outfit", "wardrobe"].includes(source.toLowerCase()) && prompt.trim() && !/{{\s*subject\s*}}/i.test(prompt)) messages.push(`This ${source} preset is subject-specific but does not contain {{subject}}.`);
-      if (/^\s*\[[A-Z /_-]+\]/.test(prompt)) messages.push("Krea 2 Turbo does not require a section heading here; the template already controls paragraph order.");
+      if (/^\s*\[[A-Z /_-]+\]/.test(prompt)) messages.push("This preset starts with a section heading; check whether the template already supplies that structure.");
       if (prompt.trim() && !/[.!?][\s\"')\]]*$/.test(prompt.trim())) messages.push("Consider ending this preset as a complete sentence so adjacent modules remain natural.");
-      if (found.preset.negativePrompt.trim()) messages.push("Negative text is preserved, but Turbo’s recommended CFG-off workflow may not use it; repeat essential exclusions positively in the main prompt.");
+      if (found.preset.negativePrompt.trim()) messages.push("Negative text is preserved separately; whether it affects generation depends on the connected model and workflow.");
       return messages;
     }
 
@@ -783,7 +783,7 @@
       const messages = presetPromptGuidance(findSelected());
       box.className = `guidance ${messages.length ? "warn" : "good"}`;
       box.replaceChildren();
-      if (!messages.length) { box.textContent = "Krea 2 Turbo check: this preset is modular and ready to assemble."; return; }
+      if (!messages.length) { box.textContent = "Prompt check: this preset is modular and ready to assemble."; return; }
       for (const message of messages) { const line = document.createElement("div"); line.textContent = message; box.append(line); }
     }
 
@@ -1265,7 +1265,7 @@
       if (duplicateParagraphs.length) messages.push("The final prompt contains a repeated paragraph.");
       box.className = `guidance ${messages.length ? "warn" : "good"}`;
       box.replaceChildren();
-      if (!messages.length) { box.textContent = "Krea 2 Turbo check: clean natural-language prompt, ready for direct text encoding."; return; }
+      if (!messages.length) { box.textContent = "Prompt check: clean assembly with no structural issues detected."; return; }
       for (const message of messages) { const line = document.createElement("div"); line.textContent = message; box.append(line); }
     }
 
