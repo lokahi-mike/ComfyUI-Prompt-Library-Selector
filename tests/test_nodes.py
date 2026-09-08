@@ -221,6 +221,38 @@ class NodeIntegrationTests(unittest.TestCase):
                 self.nodes.preferred_library_path(directory), user_library
             )
 
+    def test_active_library_rechecks_user_path_after_startup(self):
+        original_folder_paths = self.nodes.folder_paths
+        injected_library = self.nodes.LIBRARY
+        original_path = self.nodes._MANAGED_LIBRARY.path
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                self.nodes.LIBRARY = self.nodes._MANAGED_LIBRARY
+                self.nodes.folder_paths = types.SimpleNamespace(
+                    get_user_directory=lambda: directory
+                )
+                self.nodes.LIBRARY.path = self.nodes.BUILTIN_LIBRARY_PATH
+                self.assertEqual(
+                    self.nodes.active_library().path,
+                    self.nodes.BUILTIN_LIBRARY_PATH,
+                )
+
+                user_library = (
+                    Path(directory) / "prompt_library_selector" /
+                    "prompt_library.yml"
+                )
+                user_library.parent.mkdir(parents=True)
+                user_library.write_text(SAMPLE, encoding="utf-8")
+
+                self.assertEqual(
+                    self.nodes.active_library().path,
+                    user_library,
+                )
+        finally:
+            self.nodes.folder_paths = original_folder_paths
+            self.nodes._MANAGED_LIBRARY.path = original_path
+            self.nodes.LIBRARY = injected_library
+
 
 if __name__ == "__main__":
     unittest.main()

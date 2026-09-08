@@ -38,7 +38,19 @@ def preferred_library_path(user_directory=None):
 
 
 LIBRARY = PromptLibrary(preferred_library_path())
+_MANAGED_LIBRARY = LIBRARY
 BUILDER = Path(__file__).with_name("tools") / "yaml-library-builder.html"
+
+
+def active_library():
+    """Follow ComfyUI's current user directory instead of freezing startup state."""
+    # Tests and embedding hosts may deliberately inject a separate library.
+    if LIBRARY is not _MANAGED_LIBRARY:
+        return LIBRARY
+    desired_path = preferred_library_path()
+    if LIBRARY.path != desired_path:
+        LIBRARY.path = desired_path
+    return LIBRARY
 
 
 def safe_filename_stem(
@@ -192,7 +204,7 @@ class PromptLibrarySelector:
         resolved_names_in="",
         name_separator=", ",
     ):
-        entry = LIBRARY.resolve_entry(
+        entry = active_library().resolve_entry(
             category, subcategory, preset, seed, template_variable
         )
         raw_prompt = str(prompt_override or "").strip() or entry["prompt"]
@@ -261,7 +273,8 @@ class PromptLibrarySelector:
         name_separator=", ",
     ):
         return ":".join(str(value) for value in (
-            LIBRARY.fingerprint(), category, subcategory, preset, enabled, alias,
+            active_library().fingerprint(), category, subcategory, preset,
+            enabled, alias,
             template_variable, seed, prompt_override, negative_override,
             bundle_in, resolved_names_in, name_separator,
         ))
@@ -308,7 +321,7 @@ class PromptLibraryTemplateComposer:
         template_override="", pre_text="", post_text="",
         bundle_in=None,
     ):
-        template_entry = LIBRARY.resolve_template(
+        template_entry = active_library().resolve_template(
             template_category, template_subcategory, template
         )
         template_text = str(template_override or "").strip() or template_entry["template"]
@@ -339,7 +352,7 @@ class PromptLibraryTemplateComposer:
         template_override="", **kwargs
     ):
         return (
-            f"{LIBRARY.fingerprint()}:{template_category}:"
+            f"{active_library().fingerprint()}:{template_category}:"
             f"{template_subcategory}:{template}:{template_override}"
         )
 
@@ -425,7 +438,11 @@ class PromptLibraryPromptPacket:
 @PromptServer.instance.routes.get("/prompt-library-selector/library")
 async def get_prompt_library(_request):
     try:
-        return web.json_response(LIBRARY.catalog())
+        library = active_library()
+        catalog = library.catalog()
+        catalog["library_path"] = str(library.path)
+        catalog["using_user_library"] = library.path != BUILTIN_LIBRARY_PATH
+        return web.json_response(catalog)
     except (OSError, UnicodeError, ValueError) as error:
         return web.json_response({"error": str(error)}, status=400)
 

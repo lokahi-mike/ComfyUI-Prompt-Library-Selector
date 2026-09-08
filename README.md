@@ -125,7 +125,9 @@ ComfyUI/user/prompt_library_selector/prompt_library.yml
 ComfyUI's `--user-directory` setting is respected automatically, so a relocated
 user folder works without additional configuration. Create the
 `prompt_library_selector` folder, copy your current `prompt_library.yml` into
-it, and restart ComfyUI once after creating the user copy.
+it, and click **Refresh entire library**. The active location is rechecked on
+every refresh and queue, so creating or moving the user library does not require
+a ComfyUI restart.
 
 If that user-owned file does not exist, the node falls back to the example
 `prompt_library.yml` bundled in its custom-node directory. This gives new
