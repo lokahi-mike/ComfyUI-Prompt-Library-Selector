@@ -79,6 +79,8 @@ of hunting through workflows.
 - Seeded Random testing and temporary per-variable overrides
 - Model-neutral checks for modular, cleanly assembled prompts
 - Safe JSON import packets for prompt sections created by an AI
+- Dedicated [AI authoring guide](docs/AI_AUTHORING_GUIDE.md) with a copyable
+  project instruction and exact import-packet examples
 - Browser-local autosave, with no analytics or external service calls
 
 ## Installation
@@ -370,6 +372,11 @@ For future requests, ask an assistant:
 ```text
 Return these as a Prompt Library import packet.
 ```
+
+For reliable results, give the assistant the complete
+[AI Authoring Guide](docs/AI_AUTHORING_GUIDE.md). It documents the accepted JSON
+shape, modular-writing conventions, template variables, aliases, defaults, and
+a suggested—but entirely optional—library taxonomy.
 
 ## YAML format
 

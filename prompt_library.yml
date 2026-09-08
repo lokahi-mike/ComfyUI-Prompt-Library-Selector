@@ -14,6 +14,13 @@ templates:
             slots:
               character_a: character
               outfit_a: outfit
+              pose: pose
+              location: location
+              composition: composition
+              lighting: lighting
+              photography: photography
+              style: style
+              mood: mood
             aliases:
               character_a: Character A
               outfit_a: Character A
@@ -25,6 +32,8 @@ templates:
               {{pose}}
 
               {{location}}
+
+              {{composition}}
 
               {{lighting}}
 
@@ -82,6 +91,33 @@ categories:
               A relaxed contrapposto stance, weight grounded through one leg,
               shoulders natural, hands at ease.
 
+  compositions:
+    label: Compositions
+    template_slot: composition
+    subcategories:
+      portraits:
+        label: Portraits
+        presets:
+          environmental_rule_of_thirds:
+            label: Environmental Rule of Thirds
+            prompt: >-
+              Compose a wide environmental portrait using the rule of thirds,
+              keeping the subject visually dominant while leaving open space
+              to reveal the surrounding location and create layered depth.
+
+  lighting:
+    label: Lighting
+    template_slot: lighting
+    subcategories:
+      soft:
+        label: Soft Light
+        presets:
+          broad_soft_key:
+            label: Broad Soft Key
+            prompt: >-
+              Illuminate the subject with a broad soft key light, restrained
+              fill, smooth tonal transitions, and gentle dimensional shadows.
+
   photography:
     label: Photography
     template_slot: photography
@@ -90,10 +126,11 @@ categories:
         label: Studio
         presets:
           soft_editorial:
-            label: Soft Editorial Light
+            label: Polished Editorial Photography
             prompt: >-
-              Polished studio photography with broad soft light, gentle tonal
-              transitions, and controlled editorial contrast.
+              Render the scene as polished editorial photography with natural
+              perspective, controlled depth of field, realistic texture, and
+              restrained professional finishing.
 
   locations:
     label: Locations
@@ -122,7 +159,7 @@ categories:
               color, and subtle filmic depth.
 
   expressions:
-    label: Expressions
+    label: Performance and Mood
     template_slot: mood
     subcategories:
       subtle:
