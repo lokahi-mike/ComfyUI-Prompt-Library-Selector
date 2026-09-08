@@ -151,6 +151,7 @@ function widgetValue(node, name, overrides) {
 }
 
 function selectedLibraryEntry(node, overrides) {
+    const enabled = widgetValue(node, "enabled", overrides) !== false;
     const categoryKey = widgetValue(node, "category", overrides);
     const subcategoryKey = widgetValue(node, "subcategory", overrides);
     const presetKey = widgetValue(node, "preset", overrides);
@@ -177,13 +178,14 @@ function selectedLibraryEntry(node, overrides) {
         source: preset?.template_slot || category?.template_slot || categoryKey || "",
         alias,
         raw_positive: rawPositive,
-        positive: applyAlias(rawPositive, alias),
-        negative: negativeOverride || libraryNegative,
+        positive: enabled ? applyAlias(rawPositive, alias) : "",
+        negative: enabled ? (negativeOverride || libraryNegative) : "",
         library_positive: libraryPositive,
         library_negative: libraryNegative,
-        tags: preset?.tags ?? [],
+        tags: enabled ? (preset?.tags ?? []) : [],
         label: preset?.label ?? NONE_LABEL,
         preset: preset?.key ?? NONE_KEY,
+        enabled,
     };
 }
 
@@ -327,6 +329,7 @@ app.registerExtension({
             alias.callback = refreshComposerPreviews;
         }
         for (const [name, label] of [
+            ["enabled", "Include preset"],
             ["template_variable", "Template variable"],
             ["prompt_override", "Positive override"],
             ["negative_override", "Negative override"],

@@ -43,6 +43,7 @@ of hunting through workflows.
 - Friendly labels in the UI with stable machine keys saved in workflows
 - Alphabetical sorting by friendly label
 - `None` selections that safely produce empty output
+- Promotable **Include preset** switch for bypassing individual subgraph parts
 - Graceful fallback when a saved item is renamed or removed
 - Seeded **Random** selection for repeatable batch experiments
 - Editable positive and negative overrides without changing the YAML
@@ -271,6 +272,18 @@ chain passes through unchanged.
 
 The individual STRING outputs are useful for inspection and conditional
 workflows. Normal template workflows primarily use `bundle`.
+
+## Bypassing selectors inside subgraphs
+
+Every Selector has an **Include preset** switch. Promote that widget onto a
+subgraph when you want workflow-level control over optional pieces such as an
+individual character's outfit or pose.
+
+When switched off, the Selector contributes no positive prompt, negative
+prompt, tags, or resolved name. Its incoming Prompt Bundle and resolved-name
+chain pass through unchanged, so disabling a middle Selector does not break the
+rest of the chain. This is safer than ComfyUI's native node bypass for a node
+with several differently typed outputs.
 
 ## Filenames and prompt packets
 

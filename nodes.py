@@ -108,6 +108,7 @@ class PromptLibrarySelector:
                 "preset": empty_choice,
             },
             "optional": {
+                "enabled": ("BOOLEAN", {"default": True}),
                 "alias": (
                     "STRING",
                     {
@@ -181,6 +182,7 @@ class PromptLibrarySelector:
         category,
         subcategory,
         preset,
+        enabled=True,
         alias="",
         template_variable="",
         seed=0,
@@ -197,7 +199,8 @@ class PromptLibrarySelector:
         raw_negative = (
             str(negative_override or "").strip() or entry["negative_prompt"]
         )
-        selected = apply_alias(raw_prompt, alias)
+        selected = apply_alias(raw_prompt, alias) if enabled else ""
+        selected_negative = raw_negative if enabled else ""
         variable = str(template_variable or "").strip() or entry["template_slot"]
         segment = {
             "variable": variable,
@@ -212,20 +215,24 @@ class PromptLibrarySelector:
             "preset": entry["key"],
             "label": entry["label"],
         }
-        bundle = append_bundle(bundle_in, segment)
-        selected_tags = ", ".join(entry["tags"])
+        bundle = append_bundle(bundle_in, segment if enabled else None)
+        selected_tags = ", ".join(entry["tags"]) if enabled else ""
         previous_names = str(resolved_names_in or "").strip()
         current_name = (
             str(entry["label"] or "").strip()
-            if entry["key"] != NONE_KEY else ""
+            if enabled and entry["key"] != NONE_KEY else ""
         )
         resolved_names = str(name_separator).join(
             value for value in (previous_names, current_name) if value
         )
         return {
-            "ui": {"resolved": [entry["label"]], "preview": [selected]},
+            "ui": {
+                "resolved": [entry["label"] if enabled else "Bypassed"],
+                "preview": [selected],
+            },
             "result": (
-                selected, raw_negative, selected_tags, bundle, resolved_names,
+                selected, selected_negative, selected_tags, bundle,
+                resolved_names,
             ),
         }
 
@@ -243,6 +250,7 @@ class PromptLibrarySelector:
         category,
         subcategory,
         preset,
+        enabled=True,
         alias="",
         template_variable="",
         seed=0,
@@ -253,7 +261,7 @@ class PromptLibrarySelector:
         name_separator=", ",
     ):
         return ":".join(str(value) for value in (
-            LIBRARY.fingerprint(), category, subcategory, preset, alias,
+            LIBRARY.fingerprint(), category, subcategory, preset, enabled, alias,
             template_variable, seed, prompt_override, negative_override,
             bundle_in, resolved_names_in, name_separator,
         ))

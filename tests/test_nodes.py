@@ -158,6 +158,25 @@ class NodeIntegrationTests(unittest.TestCase):
         self.assertEqual(second, "Alpha + Beta")
         self.assertEqual(skipped, "Alpha + Beta")
 
+    def test_disabled_selector_contributes_nothing_and_passes_chains_through(self):
+        selector = self.nodes.PromptLibrarySelector()
+        first_result = selector.select_prompt(
+            "characters", "people", "alpha"
+        )["result"]
+        response = selector.select_prompt(
+            "characters", "people", "beta", enabled=False,
+            bundle_in=first_result[3], resolved_names_in=first_result[4],
+        )
+        result = response["result"]
+
+        self.assertEqual(result[0], "")
+        self.assertEqual(result[1], "")
+        self.assertEqual(result[2], "")
+        self.assertEqual(len(result[3]["segments"]), 1)
+        self.assertEqual(result[3]["segments"][0]["label"], "Alpha")
+        self.assertEqual(result[4], "Alpha")
+        self.assertEqual(response["ui"]["resolved"], ["Bypassed"])
+
     def test_filename_builder_sanitizes_names_and_can_include_seed(self):
         result = self.nodes.PromptLibraryFilenameBuilder().build_filename(
             "Alpha, Bé / Beta", separator="_", include_seed=True, seed=42,
