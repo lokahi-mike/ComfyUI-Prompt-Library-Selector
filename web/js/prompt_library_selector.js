@@ -7,6 +7,7 @@ const NONE_KEY = "__none__";
 const RANDOM_KEY = "__random__";
 const NONE_LABEL = "None";
 let globalLibraryRefreshTimer;
+let lastLibraryCatalog;
 
 function activeGraph() {
     return app.canvas?.graph ?? app.rootGraph ?? app.graph;
@@ -56,6 +57,7 @@ async function fetchLibraryCatalog() {
     );
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to load prompt library");
+    lastLibraryCatalog = data;
     return data;
 }
 
@@ -86,6 +88,13 @@ function refreshWhenSubgraphWidgetsChange() {
     let changed = false;
     let hasSubgraphs = false;
     visitGraphNodes(rootGraph(), (node) => {
+        if (
+            node.comfyClass === TEMPLATE_COMPOSER_NODE_TYPE
+            && lastLibraryCatalog
+            && composerCatalogNeedsRepair(node)
+        ) {
+            node._applyPromptLibraryCatalog?.(lastLibraryCatalog);
+        }
         if (!node.subgraph) return;
         hasSubgraphs = true;
         syncPromotedSelectorWidgets(node);
@@ -106,6 +115,16 @@ function refreshWhenSubgraphWidgetsChange() {
 // Current ComfyUI promoted widgets are host-owned and do not consistently invoke
 // the interior widget callback. A lightweight watcher keeps previews truly live.
 setInterval(refreshWhenSubgraphWidgetsChange, 250);
+
+function composerCatalogNeedsRepair(node) {
+    for (const name of ["template_category", "template_subcategory", "template"]) {
+        const widget = node.widgets?.find((item) => item.name === name);
+        if (!widget || widget.value === NONE_KEY) continue;
+        const values = widget.options?.values ?? [];
+        if (!Array.from(values).includes(widget.value)) return true;
+    }
+    return false;
+}
 
 function applyAlias(prompt, alias) {
     const text = String(prompt ?? "").trim();
@@ -244,6 +263,9 @@ app.registerExtension({
 
     loadedGraphNode(node) {
         if (![NODE_TYPE, TEMPLATE_COMPOSER_NODE_TYPE].includes(node.comfyClass)) return;
+        if (lastLibraryCatalog) {
+            setTimeout(() => node._applyPromptLibraryCatalog?.(lastLibraryCatalog), 0);
+        }
         node._schedulePromptLibraryReload?.();
         scheduleEntireLibraryRefresh();
     },
