@@ -262,6 +262,7 @@ app.registerExtension({
             ["template_variable", "Template variable"],
             ["prompt_override", "Positive override"],
             ["negative_override", "Negative override"],
+            ["name_separator", "Resolved-name separator"],
             ["seed", "Random seed"],
         ]) {
             const widget = node.widgets?.find((item) => item.name === name);

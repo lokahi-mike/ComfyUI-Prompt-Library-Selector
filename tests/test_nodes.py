@@ -140,6 +140,24 @@ class NodeIntegrationTests(unittest.TestCase):
         self.assertEqual(positive, "Character A is Alpha.\n\nCharacter B is Beta.")
         self.assertEqual(negative, "duplicate face")
 
+    def test_resolved_names_chain_with_custom_separator_and_skip_none(self):
+        selector = self.nodes.PromptLibrarySelector()
+        first = selector.select_prompt(
+            "characters", "people", "alpha", name_separator=" + "
+        )["result"][4]
+        second = selector.select_prompt(
+            "characters", "people", "beta",
+            resolved_names_in=first, name_separator=" + ",
+        )["result"][4]
+        skipped = selector.select_prompt(
+            "__none__", "__none__", "__none__",
+            resolved_names_in=second, name_separator=" + ",
+        )["result"][4]
+
+        self.assertEqual(first, "Alpha")
+        self.assertEqual(second, "Alpha + Beta")
+        self.assertEqual(skipped, "Alpha + Beta")
+
 
 if __name__ == "__main__":
     unittest.main()

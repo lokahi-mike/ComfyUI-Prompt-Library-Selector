@@ -232,6 +232,13 @@ of the concrete selection—even when Random was used. Connect it to a text
 overlay, filename node, contact-sheet label, or metadata node so generated
 images remain identifiable.
 
+Resolved names can also be daisy-chained between selectors. Connect one
+selector's `resolved_preset_name` output to the next selector's
+`resolved_names_in` input. **Resolved-name separator** controls the text placed
+between names, such as `, `, ` + `, ` / `, or a newline. A selector set to
+**None** contributes no name and adds no separator; an existing incoming name
+chain passes through unchanged.
+
 ## Selector outputs
 
 | Output | Purpose |
@@ -240,7 +247,7 @@ images remain identifiable.
 | `selected_negative` | Resolved negative text |
 | `selected_tags` | Comma-separated metadata tags for this selection |
 | `bundle` | Structured bundle for the next selector or Composer |
-| `resolved_preset_name` | Friendly name of the concrete selected preset |
+| `resolved_preset_name` | Friendly resolved name, optionally appended to an incoming name chain |
 
 The individual STRING outputs are useful for inspection and conditional
 workflows. Normal template workflows primarily use `bundle`.

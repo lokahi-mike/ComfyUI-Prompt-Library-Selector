@@ -73,6 +73,16 @@ class PromptLibrarySelector:
                     },
                 ),
                 "bundle_in": ("PROMPT_BUNDLE", {"forceInput": True}),
+                "resolved_names_in": ("STRING", {"forceInput": True}),
+                "name_separator": (
+                    "STRING",
+                    {
+                        "default": ", ",
+                        "multiline": False,
+                        "dynamicPrompts": False,
+                        "placeholder": "Separator between resolved names",
+                    },
+                ),
             }
         }
 
@@ -96,6 +106,8 @@ class PromptLibrarySelector:
         prompt_override="",
         negative_override="",
         bundle_in=None,
+        resolved_names_in="",
+        name_separator=", ",
     ):
         entry = LIBRARY.resolve_entry(
             category, subcategory, preset, seed, template_variable
@@ -121,10 +133,18 @@ class PromptLibrarySelector:
         }
         bundle = append_bundle(bundle_in, segment)
         selected_tags = ", ".join(entry["tags"])
+        previous_names = str(resolved_names_in or "").strip()
+        current_name = (
+            str(entry["label"] or "").strip()
+            if entry["key"] != NONE_KEY else ""
+        )
+        resolved_names = str(name_separator).join(
+            value for value in (previous_names, current_name) if value
+        )
         return {
             "ui": {"resolved": [entry["label"]], "preview": [selected]},
             "result": (
-                selected, raw_negative, selected_tags, bundle, entry["label"],
+                selected, raw_negative, selected_tags, bundle, resolved_names,
             ),
         }
 
@@ -148,11 +168,13 @@ class PromptLibrarySelector:
         prompt_override="",
         negative_override="",
         bundle_in=None,
+        resolved_names_in="",
+        name_separator=", ",
     ):
         return ":".join(str(value) for value in (
             LIBRARY.fingerprint(), category, subcategory, preset, alias,
             template_variable, seed, prompt_override, negative_override,
-            bundle_in,
+            bundle_in, resolved_names_in, name_separator,
         ))
 
 
