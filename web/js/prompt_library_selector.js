@@ -12,8 +12,12 @@ function activeGraph() {
     return app.canvas?.graph ?? app.rootGraph ?? app.graph;
 }
 
-function rootGraph() {
-    return app.rootGraph ?? app.graph ?? activeGraph();
+function rootGraph(contextNode) {
+    return contextNode?.graph?.rootGraph
+        ?? activeGraph()?.rootGraph
+        ?? app.rootGraph
+        ?? app.graph
+        ?? activeGraph();
 }
 
 function graphLink(graph, linkId) {
@@ -55,10 +59,10 @@ async function fetchLibraryCatalog() {
     return data;
 }
 
-async function refreshEntireLibrary() {
+async function refreshEntireLibrary(graph = rootGraph()) {
     try {
         const data = await fetchLibraryCatalog();
-        visitGraphNodes(rootGraph(), (node) => {
+        visitGraphNodes(graph, (node) => {
             node._applyPromptLibraryCatalog?.(data);
         });
         refreshComposerPreviews();
@@ -235,6 +239,7 @@ app.registerExtension({
 
     loadedGraphNode(node) {
         if (![NODE_TYPE, TEMPLATE_COMPOSER_NODE_TYPE].includes(node.comfyClass)) return;
+        node._schedulePromptLibraryReload?.();
         scheduleEntireLibraryRefresh();
     },
 
@@ -662,7 +667,7 @@ async function setupTemplateComposer(node) {
     };
 
     const refresh = async () => {
-        await refreshEntireLibrary();
+        await refreshEntireLibrary(rootGraph(node));
     };
 
     for (const [name, label] of [
