@@ -186,8 +186,8 @@ class PromptLibraryTemplateComposer:
             "optional": {"bundle_in": ("PROMPT_BUNDLE", {"forceInput": True})},
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "STRING")
-    RETURN_NAMES = ("positive_prompt", "negative_prompt", "metadata_tags")
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("positive_prompt", "negative_prompt")
     FUNCTION = "compose_template"
     CATEGORY = "prompt/library"
     DESCRIPTION = "Assemble a Prompt Bundle with a YAML natural-language template."
@@ -205,16 +205,15 @@ class PromptLibraryTemplateComposer:
             bundle_in, template_entry["slots"], template_entry["aliases"],
             template_entry["defaults"],
         )
-        positive, negative, tags = assemble_template(
+        positive, negative, _tags = assemble_template(
             template_text, mapped_bundle, pre_text, post_text
         )
         return {
             "ui": {
                 "preview": [positive],
                 "negative_preview": [negative],
-                "tags_preview": [tags],
             },
-            "result": (positive, negative, tags),
+            "result": (positive, negative),
         }
 
     @classmethod

@@ -9,8 +9,8 @@ earlier string-concatenation sockets.
 - `PromptLibrarySelector` selects and optionally edits one library segment.
 - Its `bundle_in` accepts the preceding selector's bundle; its `bundle` output
   contains the complete ordered segment list.
-- Its inspection outputs are `selected_prompt`, `selected_negative`, and
-  `selected_tags`.
+- Its inspection outputs are `selected_prompt`, `selected_negative`,
+  `selected_tags`, and `resolved_preset_name`.
 - `PromptLibraryTemplateComposer` selects templates through cascading category,
   subcategory, and template widgets, then assembles the final
   positive prompt, negative prompt, and deduplicated tags.
@@ -83,7 +83,6 @@ Outputs:
 
 - positive prompt
 - negative prompt
-- comma-separated deduplicated metadata tags
 
 The node substitutes mapped variables, removes unresolved optional variables,
 normalizes excess blank lines, and exposes a read-only live preview in the

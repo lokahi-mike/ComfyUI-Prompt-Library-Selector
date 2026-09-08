@@ -345,7 +345,6 @@ function liveTemplateAssembly(node) {
     return {
         positive,
         negative: unique(used.map((item) => item.negative)).join(", "),
-        tags: unique(used.flatMap((item) => item.tags ?? [])).join(", "),
         requirements,
     };
 }
@@ -413,11 +412,21 @@ async function setupTemplateComposer(node) {
         container.append(wrapper);
         return area;
     };
-    const requirementsPreview = makePreview("Template requires", 6);
-    requirementsPreview.placeholder = "Choose a template to see its required selector sources.";
+    const requirementsWrapper = document.createElement("div");
+    requirementsWrapper.style.display = "grid";
+    requirementsWrapper.style.gap = "4px";
+    const requirementsLabel = document.createElement("div");
+    requirementsLabel.textContent = "Template requires";
+    requirementsLabel.style.fontSize = "12px";
+    const requirementsList = document.createElement("div");
+    requirementsList.style.display = "grid";
+    requirementsList.style.gap = "3px";
+    requirementsList.style.fontSize = "11px";
+    requirementsList.style.lineHeight = "1.35";
+    requirementsWrapper.append(requirementsLabel, requirementsList);
+    container.append(requirementsWrapper);
     const positivePreview = makePreview("Live positive prompt", 10);
     const negativePreview = makePreview("Combined negative prompt", 3);
-    const tagsPreview = makePreview("Metadata tags", 2);
     if (typeof node.addDOMWidget === "function") {
         const widget = node.addDOMWidget("template_preview", "preview", container, {
             serialize: false,
@@ -428,7 +437,14 @@ async function setupTemplateComposer(node) {
 
     node._updatePromptLibraryLivePreview = () => {
         const assembled = liveTemplateAssembly(node);
-        requirementsPreview.value = assembled.requirements.map((requirement) => {
+        requirementsList.replaceChildren();
+        if (!assembled.requirements.length) {
+            const empty = document.createElement("div");
+            empty.textContent = "Choose a template to see its required selector sources.";
+            empty.style.opacity = "0.7";
+            requirementsList.append(empty);
+        }
+        for (const requirement of assembled.requirements) {
             const status = requirement.connected ? "✓" : "○";
             const alias = requirement.alias ? ` (${requirement.alias})` : "";
             const categories = requirement.categories.length
@@ -437,11 +453,19 @@ async function setupTemplateComposer(node) {
             const selection = requirement.connected
                 ? ` — ${requirement.selection || "connected"}`
                 : " — missing";
-            return `${status} ${requirement.variable} ← ${requirement.source}${categories}${alias}${selection}`;
-        }).join("\n");
+            const line = document.createElement("div");
+            line.textContent = `${status} ${requirement.variable} ← ${requirement.source}${categories}${alias}${selection}`;
+            line.style.whiteSpace = "normal";
+            line.style.overflowWrap = "anywhere";
+            line.style.color = requirement.connected ? "#8fd6a3" : "inherit";
+            line.style.padding = "3px 6px";
+            line.style.borderLeft = `3px solid ${requirement.connected ? "#5cae75" : "#8a7a55"}`;
+            line.style.background = "rgba(127, 127, 127, 0.08)";
+            line.style.borderRadius = "2px";
+            requirementsList.append(line);
+        }
         positivePreview.value = assembled.positive;
         negativePreview.value = assembled.negative;
-        tagsPreview.value = assembled.tags;
         node._promptLibraryLiveValue = assembled.positive;
     };
 
@@ -515,7 +539,6 @@ async function setupTemplateComposer(node) {
         originalExecuted?.apply(this, arguments);
         positivePreview.value = Array.isArray(message?.preview) ? message.preview[0] : message?.preview ?? "";
         negativePreview.value = Array.isArray(message?.negative_preview) ? message.negative_preview[0] : message?.negative_preview ?? "";
-        tagsPreview.value = Array.isArray(message?.tags_preview) ? message.tags_preview[0] : message?.tags_preview ?? "";
     };
     await refresh();
     node._schedulePromptLibraryReload();

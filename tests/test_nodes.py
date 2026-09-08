@@ -136,10 +136,9 @@ class NodeIntegrationTests(unittest.TestCase):
         response = self.nodes.PromptLibraryTemplateComposer().compose_template(
             "dual", "editorial", "pair", bundle_in=second
         )
-        positive, negative, tags = response["result"]
+        positive, negative = response["result"]
         self.assertEqual(positive, "Character A is Alpha.\n\nCharacter B is Beta.")
         self.assertEqual(negative, "duplicate face")
-        self.assertEqual(tags, "subject, alpha, beta")
 
 
 if __name__ == "__main__":

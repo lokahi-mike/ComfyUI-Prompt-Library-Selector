@@ -29,7 +29,7 @@ Prompt Bundle
         ↓
 Template Composer
         ↓
-Positive prompt + negative prompt + metadata tags
+Positive prompt + negative prompt
 ```
 
 Change a dropdown instead of rewriting a prompt. Edit the library once instead
@@ -62,10 +62,10 @@ of hunting through workflows.
 - Per-variable defaults when no selector supplies a value
 - Editable workflow-local template override
 - Optional pre-text and post-text
-- Live positive-prompt, negative-prompt, and metadata previews
+- Live positive-prompt and negative-prompt previews
 - A **Template requires** checklist showing exactly what should be connected
 - Automatic blank-line cleanup and omission of empty variables
-- Deduplicated negative prompts and metadata tags
+- Deduplicated negative prompts
 
 ### Prompt Library Workbench
 
@@ -159,8 +159,8 @@ You can reorder or omit selectors. Empty selections are ignored.
 
 On Prompt Library Template Composer, choose the template category,
 subcategory, and template. Its `positive_prompt` output can feed your positive
-text encoder. Optional outputs provide the combined negative prompt and
-deduplicated metadata tags.
+text encoder, while `negative_prompt` provides the combined negative text for
+workflows that use it. Both outputs remain visible in live previews.
 
 The live **Template requires** panel shows whether each variable is connected,
 which library source it expects, and which preset currently fills it.
