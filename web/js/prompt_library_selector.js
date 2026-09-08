@@ -11,21 +11,59 @@ function activeGraph() {
     return app.canvas?.graph ?? app.rootGraph ?? app.graph;
 }
 
-function graphLink(linkId) {
-    const links = activeGraph()?.links;
-    if (links instanceof Map) return links.get(linkId) ?? links.get(String(linkId));
+function rootGraph() {
+    return app.rootGraph ?? app.graph ?? activeGraph();
+}
+
+function graphLink(graph, linkId) {
+    const links = graph?._links ?? graph?.links;
+    if (links instanceof Map) {
+        return links.get(linkId) ?? links.get(Number(linkId)) ?? links.get(String(linkId));
+    }
     return links?.[linkId] ?? links?.[String(linkId)];
 }
 
-function graphNode(nodeId) {
-    return activeGraph()?.getNodeById?.(nodeId) ?? null;
+function graphNode(graph, nodeId) {
+    return graph?.getNodeById?.(nodeId)
+        ?? graph?._nodes?.find((node) => String(node.id) === String(nodeId))
+        ?? null;
+}
+
+function visitGraphNodes(graph, callback, visited = new Set()) {
+    if (!graph || visited.has(graph)) return;
+    visited.add(graph);
+    for (const node of graph._nodes ?? []) {
+        callback(node);
+        if (node.subgraph) visitGraphNodes(node.subgraph, callback, visited);
+    }
 }
 
 function refreshComposerPreviews() {
-    for (const node of activeGraph()?._nodes ?? []) {
+    visitGraphNodes(rootGraph(), (node) => {
         node._updatePromptLibraryLivePreview?.();
-    }
+    });
 }
+
+const subgraphWidgetSnapshots = new WeakMap();
+
+function refreshWhenSubgraphWidgetsChange() {
+    let changed = false;
+    visitGraphNodes(rootGraph(), (node) => {
+        if (!node.subgraph) return;
+        const snapshot = JSON.stringify((node.widgets ?? []).map((widget) => [
+            widget.widgetId ?? widget.name,
+            widget.value,
+        ]));
+        const previous = subgraphWidgetSnapshots.get(node);
+        subgraphWidgetSnapshots.set(node, snapshot);
+        if (previous !== undefined && previous !== snapshot) changed = true;
+    });
+    if (changed) refreshComposerPreviews();
+}
+
+// Current ComfyUI promoted widgets are host-owned and do not consistently invoke
+// the interior widget callback. A lightweight watcher keeps previews truly live.
+setInterval(refreshWhenSubgraphWidgetsChange, 250);
 
 function applyAlias(prompt, alias) {
     const text = String(prompt ?? "").trim();
@@ -46,12 +84,15 @@ function stableChoice(seed, parts, length) {
     return length ? (hash >>> 0) % length : -1;
 }
 
-function selectedLibraryEntry(node) {
-    const categoryKey = node.widgets?.find((widget) => widget.name === "category")?.value;
-    const subcategoryKey = node.widgets?.find(
-        (widget) => widget.name === "subcategory",
-    )?.value;
-    const presetKey = node.widgets?.find((widget) => widget.name === "preset")?.value;
+function widgetValue(node, name, overrides) {
+    if (overrides?.has(name)) return overrides.get(name);
+    return node.widgets?.find((widget) => widget.name === name)?.value;
+}
+
+function selectedLibraryEntry(node, overrides) {
+    const categoryKey = widgetValue(node, "category", overrides);
+    const subcategoryKey = widgetValue(node, "subcategory", overrides);
+    const presetKey = widgetValue(node, "preset", overrides);
     const category = node._promptLibraryCatalog?.find(
         (item) => item.key === categoryKey,
     );
@@ -59,16 +100,14 @@ function selectedLibraryEntry(node) {
         (item) => item.key === subcategoryKey,
     );
     const candidates = subcategory?.presets ?? [];
-    const variable = String(node.widgets?.find((widget) => widget.name === "template_variable")?.value ?? "").trim();
-    const seed = node.widgets?.find((widget) => widget.name === "seed")?.value ?? 0;
+    const variable = String(widgetValue(node, "template_variable", overrides) ?? "").trim();
+    const seed = widgetValue(node, "seed", overrides) ?? 0;
     const preset = presetKey === RANDOM_KEY
         ? candidates[stableChoice(seed, [variable, categoryKey, subcategoryKey], candidates.length)]
         : candidates.find((item) => item.key === presetKey);
-    const promptOverride = String(node.widgets?.find((widget) => widget.name === "prompt_override")?.value ?? "").trim();
-    const negativeOverride = String(node.widgets?.find((widget) => widget.name === "negative_override")?.value ?? "").trim();
-    const alias = String(
-        node.widgets?.find((widget) => widget.name === "alias")?.value ?? "",
-    ).trim();
+    const promptOverride = String(widgetValue(node, "prompt_override", overrides) ?? "").trim();
+    const negativeOverride = String(widgetValue(node, "negative_override", overrides) ?? "").trim();
+    const alias = String(widgetValue(node, "alias", overrides) ?? "").trim();
     const libraryPositive = preset?.prompt || "";
     const libraryNegative = preset?.negative_prompt || "";
     const rawPositive = promptOverride || libraryPositive;
@@ -239,19 +278,69 @@ app.registerExtension({
     },
 });
 
-function bundleSegmentsFromSelector(node, visited = new Set()) {
-    if (!node || visited.has(node.id)) return [];
-    visited.add(node.id);
-    const segments = [];
-    const bundleInput = node.inputs?.find((input) => input.name === "bundle_in");
-    if (bundleInput?.link != null) {
-        const link = graphLink(bundleInput.link);
-        const source = link ? graphNode(link.origin_id) : null;
-        if (source?.comfyClass === NODE_TYPE) {
-            segments.push(...bundleSegmentsFromSelector(source, visited));
+function promotedWidgetValues(subgraphNode, inheritedOverrides) {
+    const valuesByNode = new Map();
+    const subgraph = subgraphNode?.subgraph;
+    for (let index = 0; index < (subgraphNode?.inputs?.length ?? 0); index += 1) {
+        const hostInput = subgraphNode.inputs[index];
+        const boundarySlot = subgraph?.inputNode?.slots?.[index];
+        if (!hostInput?.widgetId || !boundarySlot) continue;
+        const hostWidget = subgraphNode.getWidgetFromSlot?.(hostInput)
+            ?? subgraphNode.widgets?.find((widget) =>
+                widget.widgetId === hostInput.widgetId || widget.name === hostInput.name);
+        const value = inheritedOverrides?.has(hostInput.name)
+            ? inheritedOverrides.get(hostInput.name)
+            : hostWidget?.value;
+        for (const linkId of boundarySlot.linkIds ?? []) {
+            const link = graphLink(subgraph, linkId);
+            const target = link ? graphNode(subgraph, link.target_id) : null;
+            const targetInput = target?.inputs?.[link?.target_slot];
+            const widgetName = targetInput?.widget?.name ?? targetInput?.name;
+            if (!target || !widgetName) continue;
+            if (!valuesByNode.has(target)) valuesByNode.set(target, new Map());
+            valuesByNode.get(target).set(widgetName, value);
         }
     }
-    const segment = selectedLibraryEntry(node);
+    return valuesByNode;
+}
+
+function bundleSegmentsFromSource(node, outputSlot, visited = new Set(), overrideContext) {
+    if (!node) return [];
+    if (node.comfyClass === NODE_TYPE) {
+        return bundleSegmentsFromSelector(node, visited, overrideContext);
+    }
+    if (!node.subgraph || visited.has(node)) return [];
+    visited.add(node);
+    const boundarySlot = node.subgraph.outputNode?.slots?.[outputSlot];
+    const internalLinkId = boundarySlot?.linkIds?.[0];
+    const internalLink = internalLinkId != null
+        ? graphLink(node.subgraph, internalLinkId)
+        : null;
+    const internalSource = internalLink
+        ? graphNode(node.subgraph, internalLink.origin_id)
+        : null;
+    const nestedContext = promotedWidgetValues(node, overrideContext?.get(node));
+    return internalSource
+        ? bundleSegmentsFromSource(
+            internalSource, internalLink.origin_slot, visited, nestedContext,
+        )
+        : [];
+}
+
+function bundleSegmentsFromSelector(node, visited = new Set(), overrideContext) {
+    if (!node || visited.has(node)) return [];
+    visited.add(node);
+    const segments = [];
+    const graph = node.graph ?? activeGraph();
+    const bundleInput = node.inputs?.find((input) => input.name === "bundle_in");
+    if (bundleInput?.link != null) {
+        const link = graphLink(graph, bundleInput.link);
+        const source = link ? graphNode(graph, link.origin_id) : null;
+        segments.push(...bundleSegmentsFromSource(
+            source, link?.origin_slot, visited, overrideContext,
+        ));
+    }
+    const segment = selectedLibraryEntry(node, overrideContext?.get(node));
     if (segment.positive || segment.negative || segment.tags?.length) segments.push(segment);
     return segments;
 }
@@ -266,11 +355,10 @@ function liveTemplateAssembly(node) {
     const override = String(node.widgets?.find((widget) => widget.name === "template_override")?.value ?? "").trim();
     let text = override || template?.template || "";
     const input = node.inputs?.find((item) => item.name === "bundle_in");
-    const link = input?.link != null ? graphLink(input.link) : null;
-    const source = link ? graphNode(link.origin_id) : null;
-    const segments = source?.comfyClass === NODE_TYPE
-        ? bundleSegmentsFromSelector(source)
-        : [];
+    const graph = node.graph ?? activeGraph();
+    const link = input?.link != null ? graphLink(graph, input.link) : null;
+    const source = link ? graphNode(graph, link.origin_id) : null;
+    const segments = bundleSegmentsFromSource(source, link?.origin_slot);
     const byVariable = new Map();
     const templateSlots = template?.slots ?? {};
     const templateDefaults = template?.defaults ?? {};
