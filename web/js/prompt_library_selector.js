@@ -6,6 +6,7 @@ const TEMPLATE_COMPOSER_NODE_TYPE = "PromptLibraryTemplateComposer";
 const NONE_KEY = "__none__";
 const RANDOM_KEY = "__random__";
 const NONE_LABEL = "None";
+let globalLibraryRefreshTimer;
 
 function activeGraph() {
     return app.canvas?.graph ?? app.rootGraph ?? app.graph;
@@ -42,6 +43,37 @@ function refreshComposerPreviews() {
     visitGraphNodes(rootGraph(), (node) => {
         node._updatePromptLibraryLivePreview?.();
     });
+}
+
+async function fetchLibraryCatalog() {
+    const response = await api.fetchApi(
+        `/prompt-library-selector/library?t=${Date.now()}`,
+        {cache: "no-store"},
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load prompt library");
+    return data;
+}
+
+async function refreshEntireLibrary() {
+    try {
+        const data = await fetchLibraryCatalog();
+        visitGraphNodes(rootGraph(), (node) => {
+            node._applyPromptLibraryCatalog?.(data);
+        });
+        refreshComposerPreviews();
+        return data;
+    } catch (error) {
+        console.error("Prompt Library Selector:", error);
+        throw error;
+    }
+}
+
+function scheduleEntireLibraryRefresh(delay = 100) {
+    clearTimeout(globalLibraryRefreshTimer);
+    globalLibraryRefreshTimer = setTimeout(() => {
+        refreshEntireLibrary().catch(() => {});
+    }, delay);
 }
 
 const subgraphWidgetSnapshots = new WeakMap();
@@ -203,7 +235,11 @@ app.registerExtension({
 
     loadedGraphNode(node) {
         if (![NODE_TYPE, TEMPLATE_COMPOSER_NODE_TYPE].includes(node.comfyClass)) return;
-        node._schedulePromptLibraryReload?.();
+        scheduleEntireLibraryRefresh();
+    },
+
+    afterConfigureGraph() {
+        scheduleEntireLibraryRefresh(0);
     },
 
     async nodeCreated(node) {
@@ -308,19 +344,18 @@ app.registerExtension({
             setTimeout(refreshComposerPreviews, 0);
         };
 
+        node._applyPromptLibraryCatalog = (data) => {
+            catalog = data.categories ?? [];
+            node._promptLibraryCatalog = catalog;
+            node._promptLibraryTemplates = data.templates ?? [];
+            updateCategory();
+            resolvedWidget.value = selectedLibraryEntry(node).label;
+            node.setDirtyCanvas(true, true);
+        };
+
         const reload = async () => {
             try {
-                const response = await api.fetchApi(
-                    `/prompt-library-selector/library?t=${Date.now()}`,
-                    { cache: "no-store" },
-                );
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || "Unable to load prompt library");
-                catalog = data.categories ?? [];
-                node._promptLibraryCatalog = catalog;
-                node._promptLibraryTemplates = data.templates ?? [];
-                updateCategory();
-                resolvedWidget.value = selectedLibraryEntry(node).label;
+                node._applyPromptLibraryCatalog(await fetchLibraryCatalog());
             } catch (error) {
                 console.error("Prompt Library Selector:", error);
                 catalog = [];
@@ -334,7 +369,6 @@ app.registerExtension({
             node._promptLibraryReloadTimer = setTimeout(reload, 100);
         };
 
-        node.addWidget("button", "Refresh library", null, reload);
         await reload();
         node._schedulePromptLibraryReload();
     },
@@ -619,25 +653,16 @@ async function setupTemplateComposer(node) {
         node._promptLibraryLiveValue = assembled.positive;
     };
 
-    const refresh = async () => {
-        try {
-            const response = await api.fetchApi(
-                `/prompt-library-selector/library?t=${Date.now()}`,
-                {cache: "no-store"},
-            );
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Unable to load prompt library");
-            node._promptLibraryTemplates = data.templates ?? [];
-            node._promptLibraryCatalog = data.categories ?? [];
-            updateCategory();
-        } catch (error) {
-            console.error("Prompt Library Template Composer:", error);
-            node._promptLibraryTemplates = [];
-            node._promptLibraryCatalog = [];
-            updateCategory();
-        }
+    node._applyPromptLibraryCatalog = (data) => {
+        node._promptLibraryTemplates = data.templates ?? [];
+        node._promptLibraryCatalog = data.categories ?? [];
+        updateCategory();
         node._updatePromptLibraryLivePreview();
         node.setDirtyCanvas(true, true);
+    };
+
+    const refresh = async () => {
+        await refreshEntireLibrary();
     };
 
     for (const [name, label] of [
@@ -672,11 +697,13 @@ async function setupTemplateComposer(node) {
         node._updatePromptLibraryLivePreview();
         node.setDirtyCanvas(true, true);
     });
-    node.addWidget("button", "Refresh library", null, refresh);
+    node.addWidget("button", "Refresh entire library", null, refresh);
 
     node._schedulePromptLibraryReload = () => {
         clearTimeout(node._promptLibraryReloadTimer);
-        node._promptLibraryReloadTimer = setTimeout(refresh, 100);
+        node._promptLibraryReloadTimer = setTimeout(() => {
+            refresh().catch(() => {});
+        }, 100);
     };
 
     const originalConnectionsChange = node.onConnectionsChange;

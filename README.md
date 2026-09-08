@@ -49,7 +49,7 @@ of hunting through workflows.
 - Workflow-specific subject aliases such as `Character A` and `Character B`
 - Automatic Prompt Bundle chaining between selector nodes
 - Manual template-variable override when automatic assignment is not desired
-- Library refresh without restarting ComfyUI after YAML-only edits
+- One Composer-level refresh updates every selector, including subgraphs
 - Live selected-prompt preview
 - Resolved friendly preset-name output for labels, overlays, and filenames
 
@@ -108,7 +108,8 @@ python -m pip install -r requirements.txt
 ```
 
 Restart ComfyUI and hard-refresh the browser after Python or frontend updates.
-YAML-only changes do not require a restart—use **Refresh library** on a node.
+YAML-only changes do not require a restart—use **Refresh entire library** on
+the Composer.
 
 ### Library file location
 
@@ -420,7 +421,9 @@ well for long prompt text.
 
 ## Refresh and reload behavior
 
-- After editing only `prompt_library.yml`, click **Refresh library**.
+- After editing only `prompt_library.yml`, click **Refresh entire library** on
+  any Composer. One fetch updates every Selector and Composer in the workflow,
+  including nodes nested inside subgraphs.
 - The YAML is read again during execution, so queued prompts use current text.
 - After changing or updating Python or JavaScript files, restart ComfyUI and
   hard-refresh the browser.
@@ -450,7 +453,7 @@ versioned with Git. A database is not required for ordinary-sized libraries.
 
 ### Dropdowns show only None or red values
 
-- Click **Refresh library**.
+- Click **Refresh entire library** on the Composer.
 - Check the browser console and ComfyUI output for YAML errors.
 - Confirm you pulled the current Python and frontend files.
 - Restart ComfyUI and perform a browser hard refresh after updating the node.
