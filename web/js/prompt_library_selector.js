@@ -50,6 +50,7 @@ function refreshWhenSubgraphWidgetsChange() {
     let changed = false;
     visitGraphNodes(rootGraph(), (node) => {
         if (!node.subgraph) return;
+        syncPromotedSelectorWidgets(node);
         const snapshot = JSON.stringify((node.widgets ?? []).map((widget) => [
             widget.widgetId ?? widget.name,
             widget.value,
@@ -127,6 +128,7 @@ function selectedLibraryEntry(node, overrides) {
 }
 
 function retainOrNone(widget, items, includeRandom = false) {
+    if (!widget) return;
     const labels = new Map([[NONE_KEY, NONE_LABEL]]);
     if (includeRandom && items?.length) labels.set(RANDOM_KEY, "Random");
     for (const item of items ?? []) labels.set(item.key, item.label);
@@ -135,6 +137,65 @@ function retainOrNone(widget, items, includeRandom = false) {
     if (!keys.has(widget.value)) widget.value = NONE_KEY;
     widget.options.values = [...keys];
     widget.options.getOptionLabel = (value) => labels.get(value) ?? String(value);
+}
+
+function promotedWidgetBindings(subgraphNode) {
+    const bindingsByNode = new Map();
+    const subgraph = subgraphNode?.subgraph;
+    for (let index = 0; index < (subgraphNode?.inputs?.length ?? 0); index += 1) {
+        const hostInput = subgraphNode.inputs[index];
+        const boundarySlot = subgraph?.inputNode?.slots?.[index];
+        if (!hostInput?.widgetId || !boundarySlot) continue;
+        const hostWidget = subgraphNode.getWidgetFromSlot?.(hostInput)
+            ?? subgraphNode.widgets?.find((widget) =>
+                widget.widgetId === hostInput.widgetId || widget.name === hostInput.name);
+        if (!hostWidget) continue;
+        for (const linkId of boundarySlot.linkIds ?? []) {
+            const link = graphLink(subgraph, linkId);
+            const target = link ? graphNode(subgraph, link.target_id) : null;
+            const targetInput = target?.inputs?.[link?.target_slot];
+            const widgetName = targetInput?.widget?.name ?? targetInput?.name;
+            if (!target || !widgetName) continue;
+            if (!bindingsByNode.has(target)) bindingsByNode.set(target, new Map());
+            bindingsByNode.get(target).set(widgetName, {hostInput, hostWidget});
+        }
+    }
+    return bindingsByNode;
+}
+
+function syncPromotedSelectorWidgets(subgraphNode) {
+    let updated = false;
+    for (const [selector, bindings] of promotedWidgetBindings(subgraphNode)) {
+        if (selector.comfyClass !== NODE_TYPE || !selector._promptLibraryCatalog) continue;
+        const resolvedWidget = (name) => bindings.get(name)?.hostWidget
+            ?? selector.widgets?.find((widget) => widget.name === name);
+        const category = resolvedWidget("category");
+        const subcategory = resolvedWidget("subcategory");
+        const preset = resolvedWidget("preset");
+        if (!bindings.size) continue;
+
+        const before = JSON.stringify([
+            category?.value, category?.options?.values,
+            subcategory?.value, subcategory?.options?.values,
+            preset?.value, preset?.options?.values,
+        ]);
+        retainOrNone(category, selector._promptLibraryCatalog);
+        const selectedCategory = selector._promptLibraryCatalog.find(
+            (item) => item.key === category?.value,
+        );
+        retainOrNone(subcategory, selectedCategory?.subcategories ?? []);
+        const selectedSubcategory = selectedCategory?.subcategories?.find(
+            (item) => item.key === subcategory?.value,
+        );
+        retainOrNone(preset, selectedSubcategory?.presets ?? [], true);
+        const after = JSON.stringify([
+            category?.value, category?.options?.values,
+            subcategory?.value, subcategory?.options?.values,
+            preset?.value, preset?.options?.values,
+        ]);
+        updated ||= before !== after;
+    }
+    if (updated) subgraphNode.setDirtyCanvas?.(true, true);
 }
 
 app.registerExtension({
