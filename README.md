@@ -86,6 +86,15 @@ aliases then resolve `{{subject}}` to `Character A` and `Character B`. Set a
 selector's optional **Template variable** only when you want to override this
 automatic assignment.
 
+Each template variable may also have a multiline **Default when unconnected**
+value. The Composer uses it only when no selector in the incoming bundle fills
+that variable; a connected selector always wins. Defaults live in the
+template's `defaults` mapping while the template text keeps the simple
+`{{variable}}` syntax. Defaults may contain `{{subject}}`, which is resolved
+through that variable's subject alias. This avoids fragile inline expressions
+such as `{{outfit:"is completely nude"}}` and safely supports punctuation,
+quotes, colons, and multiple lines.
+
 Each selector also provides:
 
 - **Random**, resolved reproducibly from its seed
@@ -124,6 +133,8 @@ templates:
               character_b: Character B
               outfit_a: Character A
               outfit_b: Character B
+            defaults:
+              outfit_a: "{{subject}} is completely nude."
             template: |-
               {{character_a}}
               {{character_b}}

@@ -50,6 +50,8 @@ templates:
               wardrobe_a: outfit
             aliases:
               character_a: Character A
+            defaults:
+              wardrobe_a: '{{subject}} is completely nude.'
             template: |-
               {{character_a}}
 
@@ -148,6 +150,7 @@ class PromptLibraryTests(unittest.TestCase):
         catalog = self.library.catalog()
         template = catalog["templates"][0]["subcategories"][0]["templates"][0]
         self.assertEqual(template["slots"]["character_a"], "character")
+        self.assertEqual(template["defaults"]["wardrobe_a"], "{{subject}} is completely nude.")
         self.assertEqual(
             self.library.resolve_template("solo", "natural_language", "natural")["label"],
             "Natural",
@@ -218,6 +221,43 @@ class PromptLibraryTests(unittest.TestCase):
                 ("character_a", "Character A is Rhiannon."),
                 ("character_b", "Character B is Florence."),
             ],
+        )
+
+    def test_template_default_fills_only_an_unconnected_variable(self):
+        bundle = map_bundle_to_template(
+            {"segments": [{
+                "variable": "character_a", "source": "character",
+                "positive": "Character A is Nadia.",
+            }]},
+            {"character_a": "character", "outfit_a": "outfit"},
+            {"outfit_a": "Character A"},
+            {"outfit_a": "{{subject}} is completely nude."},
+        )
+        positive, _, _ = assemble_template(
+            "{{character_a}}\n\n{{outfit_a}}", bundle
+        )
+        self.assertEqual(
+            positive,
+            "Character A is Nadia.\n\nCharacter A is completely nude.",
+        )
+        connected = append_bundle(bundle, {
+            "variable": "outfit_a", "source": "outfit",
+            "alias": "Character A",
+            "raw_positive": "{{subject}} wears a red dress.",
+            "positive": "Character A wears a red dress.",
+        })
+        remapped = map_bundle_to_template(
+            connected,
+            {"character_a": "character", "outfit_a": "outfit"},
+            {"outfit_a": "Character A"},
+            {"outfit_a": "{{subject}} is completely nude."},
+        )
+        overridden, _, _ = assemble_template(
+            "{{character_a}}\n\n{{outfit_a}}", remapped
+        )
+        self.assertEqual(
+            overridden,
+            "Character A is Nadia.\n\nCharacter A wears a red dress.",
         )
 
 

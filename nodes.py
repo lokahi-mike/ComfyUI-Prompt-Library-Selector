@@ -202,7 +202,8 @@ class PromptLibraryTemplateComposer:
         )
         template_text = str(template_override or "").strip() or template_entry["template"]
         mapped_bundle = map_bundle_to_template(
-            bundle_in, template_entry["slots"], template_entry["aliases"]
+            bundle_in, template_entry["slots"], template_entry["aliases"],
+            template_entry["defaults"],
         )
         positive, negative, tags = assemble_template(
             template_text, mapped_bundle, pre_text, post_text

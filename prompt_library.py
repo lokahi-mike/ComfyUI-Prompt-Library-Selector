@@ -59,7 +59,12 @@ def bundle_strings(bundle: Any, separator: str = "\n\n") -> tuple[str, str, str]
     return compose_fragments(positives, separator), ", ".join(negatives), ", ".join(tags)
 
 
-def map_bundle_to_template(bundle: Any, slots: dict[str, Any], aliases: dict[str, Any]) -> dict[str, Any]:
+def map_bundle_to_template(
+    bundle: Any,
+    slots: dict[str, Any],
+    aliases: dict[str, Any],
+    defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Map source-level segments to repeated template variables in bundle order."""
     incoming = [dict(item) for item in (bundle or {}).get("segments", []) if isinstance(item, dict)]
     normalized_slots = {str(key): str(value) for key, value in (slots or {}).items()}
@@ -87,6 +92,26 @@ def map_bundle_to_template(bundle: Any, slots: dict[str, Any], aliases: dict[str
                 template_alias,
             )
         result.append(segment)
+    assigned = {
+        str(segment.get("variable", "")).strip() for segment in result
+        if str(segment.get("variable", "")).strip()
+    }
+    for variable in normalized_slots:
+        default = str((defaults or {}).get(variable, "") or "").strip()
+        if variable in assigned or not default:
+            continue
+        alias = str((aliases or {}).get(variable, "") or "").strip()
+        result.append({
+            "variable": variable,
+            "source": normalized_slots[variable],
+            "alias": alias,
+            "raw_positive": default,
+            "positive": apply_alias(default, alias),
+            "negative": "",
+            "tags": [],
+            "defaulted": True,
+            "label": "Template default",
+        })
     return make_bundle(result)
 
 
@@ -215,7 +240,7 @@ class PromptLibrary:
     def resolve_template(
         self, category: str, subcategory: str | None = None, key: str | None = None
     ) -> dict[str, Any]:
-        empty = {"key": NONE_KEY, "label": "None", "template": "", "slots": {}, "aliases": {}}
+        empty = {"key": NONE_KEY, "label": "None", "template": "", "slots": {}, "aliases": {}, "defaults": {}}
         # Retain direct flat-template resolution for imported schema-v2 files.
         if key is None:
             key = category
@@ -280,7 +305,7 @@ class PromptLibrary:
     def _templates_are_flat(cls, templates: dict[str, Any]) -> bool:
         return bool(templates) and all(
             isinstance(value, dict)
-            and any(field in value for field in ("template", "slots", "aliases"))
+            and any(field in value for field in ("template", "slots", "aliases", "defaults"))
             for value in templates.values()
         )
 
@@ -302,8 +327,10 @@ class PromptLibrary:
     @classmethod
     def _template_catalog_entry(cls, key: Any, raw_entry: Any) -> dict[str, Any]:
         entry = cls._mapping(raw_entry, f"template '{key}'")
-        slots, aliases = entry.get("slots", {}) or {}, entry.get("aliases", {}) or {}
-        if not isinstance(slots, dict) or not isinstance(aliases, dict):
+        slots = entry.get("slots", {}) or {}
+        aliases = entry.get("aliases", {}) or {}
+        defaults = entry.get("defaults", {}) or {}
+        if not all(isinstance(value, dict) for value in (slots, aliases, defaults)):
             raise ValueError(f"template '{key}' mappings must be mappings")
         return {
             "key": str(key),
@@ -311,6 +338,7 @@ class PromptLibrary:
             "template": str(entry.get("template", "") or ""),
             "slots": {str(name): str(value) for name, value in slots.items()},
             "aliases": {str(name): str(value) for name, value in aliases.items()},
+            "defaults": {str(name): str(value) for name, value in defaults.items()},
         }
 
     @classmethod

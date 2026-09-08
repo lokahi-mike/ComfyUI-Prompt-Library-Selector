@@ -65,6 +65,8 @@ templates:
             aliases:
               character_a: Character A
               character_b: Character B
+            defaults:
+              character_b: Character B is an unspecified adult.
             template: |-
               {{character_a}}
 

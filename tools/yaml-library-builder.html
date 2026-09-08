@@ -186,7 +186,8 @@
     .variable-list { display: flex; flex-wrap: wrap; gap: .4rem; }
     .variable-pill { padding: .3rem .48rem; border: 1px solid var(--line); border-radius: 999px; color: var(--accent-2); font: .74rem "Cascadia Code", Consolas, monospace; }
     .mapping-list { display: grid; gap: .55rem; }
-    .mapping-row { display: grid; grid-template-columns: minmax(8rem, .8fr) minmax(9rem, 1fr) minmax(9rem, 1fr); gap: .55rem; align-items: end; padding: .65rem; border: 1px solid var(--line); border-radius: 10px; }
+    .mapping-row { display: grid; grid-template-columns: minmax(8rem, .7fr) minmax(8rem, .9fr) minmax(8rem, .9fr) minmax(12rem, 1.4fr); gap: .55rem; align-items: end; padding: .65rem; border: 1px solid var(--line); border-radius: 10px; }
+    .mapping-row textarea { min-height: 4.25rem; }
     .mapping-name { color: var(--accent-2); font: .78rem "Cascadia Code", Consolas, monospace; padding-bottom: .7rem; }
     .playground-controls { display: grid; gap: .8rem; }
     .playground-slot { border: 1px solid var(--line); border-radius: 11px; padding: .75rem; display: grid; gap: .55rem; }
@@ -473,6 +474,7 @@
       template.text = String(template.text ?? template.template ?? "");
       template.slots = template.slots && typeof template.slots === "object" ? template.slots : {};
       template.aliases = template.aliases && typeof template.aliases === "object" ? template.aliases : {};
+      template.defaults = template.defaults && typeof template.defaults === "object" ? template.defaults : {};
       template.autoKey ??= false;
       return template;
     }
@@ -599,6 +601,7 @@
         id: makeId(), key: slugify(label), label, autoKey: true,
         slots: { character_a: "character", outfit_a: "outfit" },
         aliases: { character_a: "Character A", outfit_a: "Character A", pose: "Character A", mood: "Character A" },
+        defaults: {},
         text: "{{character_a}}\n\n{{outfit_a}}\n\n{{pose}}\n\n{{location}}\n\n{{composition}}\n\n{{lighting}}\n\n{{photography}}\n\n{{mood}}",
       };
     }
@@ -1036,7 +1039,7 @@
       details.className = "metadata";
       details.open = true;
       const summary = document.createElement("summary");
-      summary.textContent = "Variable sources and aliases";
+      summary.textContent = "Variable sources, aliases, and defaults";
       const list = document.createElement("div");
       list.className = "mapping-list";
       const variables = templateVariables(template.text);
@@ -1044,6 +1047,7 @@
       for (const variable of variables) {
         template.slots[variable] ||= defaultSourceFor(variable);
         if (!(variable in template.aliases)) template.aliases[variable] = suggestedAlias(variable);
+        if (!(variable in template.defaults)) template.defaults[variable] = "";
         const row = document.createElement("div"); row.className = "mapping-row";
         const name = document.createElement("div"); name.className = "mapping-name"; name.textContent = `{{${variable}}}`;
         const sourceLabel = document.createElement("label"); sourceLabel.textContent = "Library source";
@@ -1057,7 +1061,11 @@
         const alias = document.createElement("input"); alias.placeholder = "Character A"; alias.value = template.aliases[variable] ?? "";
         alias.addEventListener("input", () => { template.aliases[variable] = alias.value; renderTemplateWithoutEditor(false); });
         aliasLabel.append(alias);
-        row.append(name, sourceLabel, aliasLabel); list.append(row);
+        const defaultLabel = document.createElement("label"); defaultLabel.textContent = "Default when unconnected (optional)";
+        const defaultText = document.createElement("textarea"); defaultText.placeholder = "Used only when no selector supplies this variable"; defaultText.value = template.defaults[variable] ?? "";
+        defaultText.addEventListener("input", () => { template.defaults[variable] = defaultText.value; renderTemplateWithoutEditor(false); });
+        defaultLabel.append(defaultText);
+        row.append(name, sourceLabel, aliasLabel, defaultLabel); list.append(row);
       }
       if (!variables.length) list.innerHTML = '<span class="hint">Add a {{variable}} to create its source mapping.</span>';
       details.append(summary, list);
@@ -1211,7 +1219,8 @@
       for (const variable of templateVariables(template.text)) {
         const source = template.slots?.[variable] || defaultSourceFor(variable);
         const entry = presets.find((candidate) => candidate.slot === source);
-        assembled = assembled.replace(new RegExp(`{{\\s*${variable}\\s*}}`, "g"), applySubjectAlias(entry?.preset.prompt ?? "", template.aliases?.[variable]));
+        const prompt = entry?.preset.prompt ?? template.defaults?.[variable] ?? "";
+        assembled = assembled.replace(new RegExp(`{{\\s*${variable}\\s*}}`, "g"), applySubjectAlias(prompt, template.aliases?.[variable]));
       }
       return cleanAssembly(assembled);
     }
@@ -1301,7 +1310,8 @@
         playground.selections[variable] = selected; select.value = selected;
         let entry = candidates.find((candidate) => candidate.preset.id === selected);
         if (selected === RANDOM_KEY) entry = candidates[hashChoice(playground.seed, variable, candidates.length)];
-        resolved.textContent = selected === RANDOM_KEY ? `Random: ${entry?.preset.label ?? "no matches"}` : `${candidates.length} available`;
+        const defaultValue = template.defaults?.[variable] ?? "";
+        resolved.textContent = selected === RANDOM_KEY ? `Random: ${entry?.preset.label ?? "no matches"}` : (!selected && defaultValue.trim() ? "Template default active" : `${candidates.length} available`);
         const override = playground.overrides[variable] ?? { positive: "", negative: "" };
         playground.overrides[variable] = override;
         const details = document.createElement("details"); details.className = "metadata";
@@ -1311,19 +1321,19 @@
         const resetEdit = document.createElement("button"); resetEdit.type = "button"; resetEdit.className = "ghost compact"; resetEdit.textContent = "Use library original";
         const positive = document.createElement("textarea"); positive.placeholder = "Positive prompt override (empty uses the library original)"; positive.value = override.positive;
         const negative = document.createElement("textarea"); negative.placeholder = "Negative prompt override (empty uses the library original)"; negative.value = override.negative;
-        loadSelected.addEventListener("click", () => { override.positive = entry?.preset.prompt ?? ""; override.negative = entry?.preset.negativePrompt ?? ""; positive.value = override.positive; negative.value = override.negative; updatePlaygroundOutput(); });
+        loadSelected.addEventListener("click", () => { override.positive = entry?.preset.prompt ?? defaultValue; override.negative = entry?.preset.negativePrompt ?? ""; positive.value = override.positive; negative.value = override.negative; updatePlaygroundOutput(); });
         resetEdit.addEventListener("click", () => { override.positive = ""; override.negative = ""; positive.value = ""; negative.value = ""; updatePlaygroundOutput(); });
         positive.addEventListener("input", () => { override.positive = positive.value; updatePlaygroundOutput(); });
         negative.addEventListener("input", () => { override.negative = negative.value; updatePlaygroundOutput(); });
         editActions.append(loadSelected, resetEdit); details.append(editActions, positive, negative);
         select.addEventListener("change", () => { playground.selections[variable] = select.value; savePlayground(); renderPlayground(); });
         box.append(head, select, details); slots.append(box);
-        const prompt = override.positive.trim() || entry?.preset.prompt || "";
+        const prompt = override.positive.trim() || entry?.preset.prompt || defaultValue;
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         const negativePrompt = override.negative.trim() || entry?.preset.negativePrompt || "";
         if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? [])]) tags.add(tag);
-        if (!entry && !override.positive.trim()) missing.push(variable);
+        if (!entry && !override.positive.trim() && !defaultValue.trim()) missing.push(variable);
       }
       let assembled = template.text;
       for (const variable of templateVariables(template.text)) assembled = assembled.replace(new RegExp(`{{\\s*${variable}\\s*}}`, "g"), values[variable] ?? "");
@@ -1350,12 +1360,13 @@
         let entry = candidates.find((candidate) => candidate.preset.id === selected);
         if (selected === RANDOM_KEY) entry = candidates[hashChoice(playground.seed, variable, candidates.length)];
         const override = playground.overrides[variable] ?? { positive: "", negative: "" };
-        const prompt = override.positive.trim() || entry?.preset.prompt || "";
+        const defaultValue = template.defaults?.[variable] ?? "";
+        const prompt = override.positive.trim() || entry?.preset.prompt || defaultValue;
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         const negativePrompt = override.negative.trim() || entry?.preset.negativePrompt || "";
         if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? [])]) tags.add(tag);
-        if (!entry && !override.positive.trim()) missing.push(variable);
+        if (!entry && !override.positive.trim() && !defaultValue.trim()) missing.push(variable);
       }
       let assembled = template.text;
       for (const variable of templateVariables(template.text)) assembled = assembled.replace(new RegExp(`{{\\s*${variable}\\s*}}`, "g"), values[variable] ?? "");
@@ -1422,7 +1433,7 @@
         if (isTemplate) {
           const text = String(raw.template ?? raw.text ?? "");
           if (!text.trim()) throw new Error("Template \"" + label + "\" has no template text.");
-          return { type: "template", category, subcategory, key, label, text, slots: raw.slots || {}, aliases: raw.aliases || {} };
+          return { type: "template", category, subcategory, key, label, text, slots: raw.slots || {}, aliases: raw.aliases || {}, defaults: raw.defaults || {} };
         }
         const prompt = String(raw.prompt ?? raw.positive_prompt ?? raw.positive ?? "");
         if (!prompt.trim()) throw new Error("Preset \"" + label + "\" has no prompt text.");
@@ -1489,7 +1500,7 @@
         const { category, subcategory } = findOrCreateCategory(item);
         if (item.type === "template") {
           const template = newTemplate(item.label);
-          Object.assign(template, { key: item.key, autoKey: false, text: item.text, slots: item.slots, aliases: item.aliases });
+          Object.assign(template, { key: item.key, autoKey: false, text: item.text, slots: item.slots, aliases: item.aliases, defaults: item.defaults });
           subcategory.templates.push(template);
           templateSelection = { type: "template", id: template.id };
         } else {
@@ -1618,6 +1629,7 @@
                 key: item.key, label: item.label, text: item.text,
                 slots: Object.fromEntries(variables.map((variable) => [variable, item.slots?.[variable] || defaultSourceFor(variable)])),
                 aliases: Object.fromEntries(variables.filter((variable) => String(item.aliases?.[variable] ?? "").trim()).map((variable) => [variable, item.aliases[variable].trim()])),
+                defaults: Object.fromEntries(variables.filter((variable) => String(item.defaults?.[variable] ?? "").trim()).map((variable) => [variable, item.defaults[variable]])),
               };
             }),
           })),
@@ -1665,6 +1677,11 @@
               if (aliased.length) {
                 lines.push("            aliases:");
                 for (const variable of aliased) lines.push(`              ${keyLine(variable)}: ${quote(template.aliases[variable].trim())}`);
+              }
+              const defaulted = variables.filter((variable) => String(template.defaults?.[variable] ?? "").trim());
+              if (defaulted.length) {
+                lines.push("            defaults:");
+                for (const variable of defaulted) lines.push(`              ${keyLine(variable)}: ${quote(template.defaults[variable])}`);
               }
             }
             lines.push("            template: |-", indentPrompt(template.text, 14));
@@ -1761,6 +1778,7 @@
           template.key = keyMatch[1];
           template.autoKey = false;
           template.text = "";
+          template.defaults = {};
           template.slots = {};
           template.aliases = {};
           templateSubcategory.templates.push(template);
@@ -1815,7 +1833,7 @@
 
         // Flat schema-v2 import: a top-level template reveals itself when one
         // of its template-only fields appears beneath the top-level key.
-        if (section === "templates" && indent === 4 && templateCategory && (text === "slots:" || text === "aliases:" || /^template:\s*[>|]/.test(text))) {
+        if (section === "templates" && indent === 4 && templateCategory && (text === "slots:" || text === "aliases:" || text === "defaults:" || /^template:\s*[>|]/.test(text))) {
           if (!flatTemplate) {
             template = newTemplate(templateCategory.key);
             template.key = templateCategory.key;
@@ -1824,6 +1842,7 @@
             template.text = "";
             template.slots = {};
             template.aliases = {};
+            template.defaults = {};
             data.templateCategories = data.templateCategories.filter((item) => item.id !== templateCategory.id);
             let generalCategory = data.templateCategories.find((item) => item.key === "general");
             if (!generalCategory) {
@@ -1841,7 +1860,7 @@
             flatTemplate = true;
           }
         }
-        if (section === "templates" && ((flatTemplate && indent === 4) || (!flatTemplate && indent === 12)) && (text === "slots:" || text === "aliases:") && template) {
+        if (section === "templates" && ((flatTemplate && indent === 4) || (!flatTemplate && indent === 12)) && (text === "slots:" || text === "aliases:" || text === "defaults:") && template) {
           templateMapSection = text.slice(0, -1);
           continue;
         }

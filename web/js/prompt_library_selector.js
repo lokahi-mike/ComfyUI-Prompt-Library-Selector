@@ -273,6 +273,7 @@ function liveTemplateAssembly(node) {
         : [];
     const byVariable = new Map();
     const templateSlots = template?.slots ?? {};
+    const templateDefaults = template?.defaults ?? {};
     const explicit = new Set(segments.map((item) => item.variable).filter((variable) => variable in templateSlots));
     const availableBySource = new Map();
     for (const [variable, sourceName] of Object.entries(templateSlots)) {
@@ -289,6 +290,18 @@ function liveTemplateAssembly(node) {
         const alias = template?.aliases?.[segment.variable];
         if (alias && !segment.alias) segment.positive = applyAlias(segment.raw_positive, alias);
         if (segment.variable) byVariable.set(segment.variable, segment);
+    }
+    for (const variable of Object.keys(templateSlots)) {
+        if (byVariable.has(variable) || !String(templateDefaults[variable] ?? "").trim()) continue;
+        byVariable.set(variable, {
+            variable,
+            source: templateSlots[variable],
+            positive: applyAlias(templateDefaults[variable], template?.aliases?.[variable]),
+            negative: "",
+            tags: [],
+            label: "Template default",
+            defaulted: true,
+        });
     }
     const variables = [...new Set([...text.matchAll(/{{\s*([a-zA-Z_][a-zA-Z0-9_-]*)\s*}}/g)].map((match) => match[1]))];
     for (const variable of variables) {
@@ -314,7 +327,8 @@ function liveTemplateAssembly(node) {
             categories: matchingCategories,
             alias: template?.aliases?.[variable] ?? "",
             connected: Boolean(segment),
-            selection: segment?.label ?? "",
+            selection: segment?.defaulted ? "Template default" : (segment?.label ?? ""),
+            defaulted: Boolean(segment?.defaulted),
         };
     });
     for (const variable of variables) {
