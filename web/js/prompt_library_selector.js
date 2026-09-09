@@ -188,10 +188,9 @@ function selectedLibraryEntry(node, overrides) {
     const libraryPositive = preset?.prompt || "";
     const libraryNegative = preset?.negative_prompt || "";
     const addendaItems = preset?.addenda ?? [];
-    const initialized = widgetValue(node, "addenda_initialized", overrides) === true;
-    const enabledKeys = new Set(addendaItems.filter((item, index) => initialized
-        ? widgetValue(node, `addendum_${index + 1}`, overrides) === true
-        : item.default_enabled).map((item) => item.key));
+    const enabledKeys = new Set(addendaItems.filter((item, index) =>
+        widgetValue(node, `addendum_${index + 1}`, overrides) === true
+    ).map((item) => item.key));
     const chosenAddenda = addendaItems.filter((item) => enabledKeys.has(item.key));
     const rawPositive = [
         promptOverride || libraryPositive,
@@ -426,13 +425,7 @@ app.registerExtension({
 
         const addendaWidgets = Array.from({length: 8}, (_, index) =>
             node.widgets?.find((widget) => widget.name === `addendum_${index + 1}`));
-        const addendaInitialized = node.widgets?.find(
-            (widget) => widget.name === "addenda_initialized",
-        );
-        if (addendaInitialized) {
-            addendaInitialized.computeSize = () => [0, -4];
-            addendaInitialized.hidden = true;
-        }
+        node.properties ??= {};
 
         normalizeSeedWidget(
             node.widgets?.find((widget) => widget.name === "seed"),
@@ -454,17 +447,17 @@ app.registerExtension({
             const identity = selectedPreset
                 ? `${category.value}/${subcategory.value}/${selectedPreset.key}`
                 : NONE_KEY;
-            const identityChanged = node._promptLibraryAddendaIdentity !== undefined
-                && node._promptLibraryAddendaIdentity !== identity;
-            const initialize = addendaInitialized?.value !== true || identityChanged;
-            node._promptLibraryAddendaIdentity = identity;
-            if (addendaInitialized) addendaInitialized.value = true;
+            const initialize = node.properties.promptLibraryAddendaIdentity !== identity;
+            node.properties.promptLibraryAddendaIdentity = identity;
             for (let index = 0; index < addendaWidgets.length; index += 1) {
                 const widget = addendaWidgets[index];
                 if (!widget) continue;
                 const addendum = selectedPreset?.addenda?.[index];
                 widget.label = addendum ? `Add: ${addendum.label}` : `Unused addendum ${index + 1}`;
                 widget.hidden = !addendum;
+                widget.computedDisabled = !addendum;
+                const slot = node.getSlotFromWidget?.(widget);
+                if (slot) slot.label = widget.label;
                 if (addendum && initialize) widget.value = Boolean(addendum.default_enabled);
             }
             node.setSize?.(node.computeSize?.() ?? node.size);
@@ -528,7 +521,6 @@ app.registerExtension({
         for (const widget of addendaWidgets) {
             if (!widget) continue;
             widget.callback = () => {
-                if (addendaInitialized) addendaInitialized.value = true;
                 refreshComposerPreviews();
                 node.setDirtyCanvas(true, true);
             };

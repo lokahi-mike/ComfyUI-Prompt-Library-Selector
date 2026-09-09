@@ -203,7 +203,6 @@ class PromptLibrarySelector:
                     f"addendum_{index}": ("BOOLEAN", {"default": False})
                     for index in range(1, 9)
                 },
-                "addenda_initialized": ("BOOLEAN", {"default": False}),
                 "bundle_in": ("PROMPT_BUNDLE", {"forceInput": True}),
                 "resolved_names_in": ("STRING", {"forceInput": True}),
                 "name_separator": (
@@ -238,15 +237,14 @@ class PromptLibrarySelector:
         seed=0,
         prompt_override="",
         negative_override="",
-        addendum_1=False,
-        addendum_2=False,
-        addendum_3=False,
-        addendum_4=False,
-        addendum_5=False,
-        addendum_6=False,
-        addendum_7=False,
-        addendum_8=False,
-        addenda_initialized=False,
+        addendum_1=None,
+        addendum_2=None,
+        addendum_3=None,
+        addendum_4=None,
+        addendum_5=None,
+        addendum_6=None,
+        addendum_7=None,
+        addendum_8=None,
         bundle_in=None,
         resolved_names_in="",
         name_separator=", ",
@@ -258,14 +256,14 @@ class PromptLibrarySelector:
             addendum_1, addendum_2, addendum_3, addendum_4,
             addendum_5, addendum_6, addendum_7, addendum_8,
         )
-        if addenda_initialized:
+        if all(value is None for value in switches):
             enabled_keys = {
-                item["key"] for index, item in enumerate(entry["addenda"][:8])
-                if switches[index]
+                item["key"] for item in entry["addenda"] if item["default_enabled"]
             }
         else:
             enabled_keys = {
-                item["key"] for item in entry["addenda"] if item["default_enabled"]
+                item["key"] for index, item in enumerate(entry["addenda"][:8])
+                if switches[index]
             }
         chosen_addenda = [
             item for item in entry["addenda"] if item["key"] in enabled_keys
