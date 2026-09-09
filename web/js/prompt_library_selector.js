@@ -112,7 +112,7 @@ function refreshWhenSubgraphWidgetsChange() {
     });
     // Promoted widget values live in ComfyUI's host-scoped store and do not
     // consistently produce callbacks. While subgraphs exist, keep Composer
-    // previews current even when no observable widget changed.
+    // requirements authoritative even when no observable widget changed.
     if (changed || hasSubgraphs) refreshComposerPreviews();
 }
 
@@ -588,15 +588,31 @@ function liveTemplateAssembly(node) {
         .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
     const used = variables.map((variable) => byVariable.get(variable)).filter(Boolean);
     const unique = (values) => [...new Map(values.filter(Boolean).map((value) => [String(value).trim().toLowerCase(), String(value).trim()])).values()];
-    const requirements = Object.entries(templateSlots).map(([variable, sourceName]) => ({
-        variable,
-        source: sourceName,
-    }));
+    const requirements = Object.entries(templateSlots).map(([variable, sourceName]) => {
+        const segment = byVariable.get(variable);
+        const matchingCategories = (node._promptLibraryCatalog ?? [])
+            .filter((categoryEntry) =>
+                (categoryEntry.template_slot || categoryEntry.key) === sourceName)
+            .map((categoryEntry) => categoryEntry.label);
+        return {
+            variable,
+            source: sourceName,
+            categories: matchingCategories,
+            alias: template?.aliases?.[variable] ?? "",
+            connected: Boolean(segment),
+            selection: segment?.defaulted ? "Template default" : (segment?.label ?? ""),
+            defaulted: Boolean(segment?.defaulted),
+        };
+    });
     for (const variable of variables) {
         if (variable in templateSlots) continue;
         requirements.push({
             variable,
             source: "unmapped",
+            categories: [],
+            alias: template?.aliases?.[variable] ?? "",
+            connected: Boolean(byVariable.get(variable)),
+            selection: byVariable.get(variable)?.label ?? "",
         });
     }
     return {
@@ -702,12 +718,21 @@ async function setupTemplateComposer(node) {
             requirementsList.append(empty);
         }
         for (const requirement of assembled.requirements) {
+            const status = requirement.connected ? "✓" : "○";
+            const alias = requirement.alias ? ` (${requirement.alias})` : "";
+            const categories = requirement.categories.length
+                ? ` [${requirement.categories.join(", ")}]`
+                : requirement.source === "unmapped" ? " [no source mapping]" : " [no matching category]";
+            const selection = requirement.connected
+                ? ` — ${requirement.selection || "connected"}`
+                : " — missing";
             const line = document.createElement("div");
-            line.textContent = `${requirement.variable} ← ${requirement.source}`;
+            line.textContent = `${status} ${requirement.variable} ← ${requirement.source}${categories}${alias}${selection}`;
             line.style.whiteSpace = "normal";
             line.style.overflowWrap = "anywhere";
+            line.style.color = requirement.connected ? "#8fd6a3" : "inherit";
             line.style.padding = "3px 6px";
-            line.style.borderLeft = "3px solid #8a7a55";
+            line.style.borderLeft = `3px solid ${requirement.connected ? "#5cae75" : "#8a7a55"}`;
             line.style.background = "rgba(127, 127, 127, 0.08)";
             line.style.borderRadius = "2px";
             requirementsList.append(line);
