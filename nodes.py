@@ -199,14 +199,11 @@ class PromptLibrarySelector:
                         "placeholder": "Empty uses the selected YAML negative prompt",
                     },
                 ),
-                "enabled_addenda": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "multiline": False,
-                        "dynamicPrompts": False,
-                    },
-                ),
+                **{
+                    f"addendum_{index}": ("BOOLEAN", {"default": False})
+                    for index in range(1, 9)
+                },
+                "addenda_initialized": ("BOOLEAN", {"default": False}),
                 "bundle_in": ("PROMPT_BUNDLE", {"forceInput": True}),
                 "resolved_names_in": ("STRING", {"forceInput": True}),
                 "name_separator": (
@@ -241,7 +238,15 @@ class PromptLibrarySelector:
         seed=0,
         prompt_override="",
         negative_override="",
-        enabled_addenda="",
+        addendum_1=False,
+        addendum_2=False,
+        addendum_3=False,
+        addendum_4=False,
+        addendum_5=False,
+        addendum_6=False,
+        addendum_7=False,
+        addendum_8=False,
+        addenda_initialized=False,
         bundle_in=None,
         resolved_names_in="",
         name_separator=", ",
@@ -249,21 +254,16 @@ class PromptLibrarySelector:
         entry = active_library().resolve_entry(
             category, subcategory, preset, seed, template_variable
         )
-        enabled_keys = None
-        resolved_identity = f"{category}/{subcategory}/{entry['key']}"
-        try:
-            addenda_state = json.loads(str(enabled_addenda or ""))
-            if isinstance(addenda_state, dict):
-                state_identity = str(addenda_state.get("preset", "") or "")
-                if not state_identity or state_identity == resolved_identity:
-                    enabled_keys = {
-                        str(key) for key in addenda_state.get("enabled", [])
-                    }
-            elif isinstance(addenda_state, list):
-                enabled_keys = {str(key) for key in addenda_state}
-        except (TypeError, ValueError, json.JSONDecodeError):
-            pass
-        if enabled_keys is None:
+        switches = (
+            addendum_1, addendum_2, addendum_3, addendum_4,
+            addendum_5, addendum_6, addendum_7, addendum_8,
+        )
+        if addenda_initialized:
+            enabled_keys = {
+                item["key"] for index, item in enumerate(entry["addenda"][:8])
+                if switches[index]
+            }
+        else:
             enabled_keys = {
                 item["key"] for item in entry["addenda"] if item["default_enabled"]
             }

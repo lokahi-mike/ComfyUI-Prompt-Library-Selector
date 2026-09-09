@@ -152,7 +152,7 @@ class NodeIntegrationTests(unittest.TestCase):
     def test_selector_applies_enabled_addenda_to_all_outputs(self):
         response = self.nodes.PromptLibrarySelector().select_prompt(
             "characters", "people", "alpha", alias="Character A",
-            enabled_addenda='{"preset":"characters/people/alpha","enabled":["freckles"]}',
+            addendum_1=True, addendum_2=False, addenda_initialized=True,
         )
         selected, negative, tags, bundle = response["result"][:4]
         self.assertEqual(
@@ -170,24 +170,24 @@ class NodeIntegrationTests(unittest.TestCase):
         )["result"]
         disabled_result = selector.select_prompt(
             "characters", "people", "alpha",
-            enabled_addenda='{"preset":"characters/people/alpha","enabled":[]}',
+            addendum_1=False, addendum_2=False, addenda_initialized=True,
         )["result"]
         self.assertEqual(default_result[1], "duplicate face, duplicate person")
         self.assertEqual(disabled_result[1], "duplicate face")
 
-    def test_selector_ignores_addenda_state_for_another_preset(self):
+    def test_selector_switches_are_safe_for_a_preset_without_addenda(self):
         result = self.nodes.PromptLibrarySelector().select_prompt(
             "characters", "people", "beta",
-            enabled_addenda='{"preset":"characters/people/alpha","enabled":["freckles"]}',
+            addendum_1=True, addendum_2=True, addenda_initialized=True,
         )["result"]
         self.assertEqual(result[0], "{{subject}} is Beta.")
         self.assertEqual(result[1], "")
         self.assertEqual(result[2], "subject, beta")
 
-    def test_stale_addenda_state_falls_back_to_current_preset_defaults(self):
+    def test_uninitialized_switches_fall_back_to_current_preset_defaults(self):
         result = self.nodes.PromptLibrarySelector().select_prompt(
             "characters", "people", "alpha",
-            enabled_addenda='{"preset":"characters/people/removed","enabled":["freckles"]}',
+            addendum_1=True, addendum_2=False, addenda_initialized=False,
         )["result"]
         self.assertEqual(result[0], "{{subject}} is Alpha.")
         self.assertEqual(result[1], "duplicate face, duplicate person")

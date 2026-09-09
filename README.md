@@ -313,22 +313,16 @@ with several differently typed outputs.
 
 ### Optional addenda on a subgraph
 
-Optional-addendum switches can also live on the outside of a subgraph. ComfyUI
-requires one real promoted widget to carry that state across the subgraph
-boundary, while the extension turns it into friendly checkboxes:
+Optional-addendum switches are native Boolean widgets, so they can live safely
+on the outside of a subgraph. Open the subgraph and promote whichever visible
+**Add:** switches you want to control from the parent, just as you promote the
+category, subcategory, preset, or seed.
 
-1. Open the subgraph and click **Show addenda state for subgraph promotion** on
-   the Selector.
-2. Promote **Optional addenda state (promote this)** to the parent, using the
-   same ComfyUI promotion command used for the category, subcategory, and preset.
-3. Return to the parent graph. The packed state field is hidden and replaced by
-   the selected preset's **Add:** switches on the subgraph node.
-
-The switches change automatically when the promoted preset changes, and their
-values are saved separately for each subgraph instance. For nested subgraphs,
-promote the state once through each boundary where you want the switches to be
-available. If the state widget is not promoted, the Selector still uses and
-saves its addenda normally inside the subgraph.
+The promoted switches are real subgraph inputs—not a JSON field with a cosmetic
+overlay—so ComfyUI serializes and restores them normally. Their labels follow
+the selected preset, and unused positions stay hidden. Up to eight addenda are
+supported per preset. For nested subgraphs, promote each desired switch once
+through every boundary where it should be available.
 
 ## Filenames and prompt packets
 
