@@ -314,16 +314,23 @@ with several differently typed outputs.
 
 ### Optional addenda on a subgraph
 
+The addendum interface is designed primarily for **ComfyUI Nodes 2.0**.
 Optional-addendum switches are native Boolean widgets, so they can live safely
 on the outside of a subgraph. Open the subgraph and promote whichever visible
 **Add:** switches you want to control from the parent, just as you promote the
 category, subcategory, preset, or seed.
 
 The promoted switches are real subgraph inputs—not a JSON field with a cosmetic
-overlay—so ComfyUI serializes and restores them normally. Their labels follow
-the selected preset, and unused positions stay hidden. Up to eight addenda are
-supported per preset. For nested subgraphs, promote each desired switch once
-through every boundary where it should be available.
+the category's stable `addenda_slots`; changing presets changes the text and
+default carried by those controls without changing the subgraph interface.
+Only the number of controls declared by the category is active, up to eight.
+For nested subgraphs, promote each desired switch once through every boundary
+where it should be available.
+
+Nodes 1.0 may also render the controls, but its widget hiding and promotion
+behavior is not the primary UI contract. When troubleshooting a promoted
+addendum, verify it in Nodes 2.0 before treating a Nodes 1.0 presentation
+difference as a selector bug.
 
 ## Filenames and prompt packets
 
