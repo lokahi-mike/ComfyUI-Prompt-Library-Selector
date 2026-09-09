@@ -266,7 +266,10 @@ function promotedWidgetBindings(subgraphNode) {
     const subgraph = subgraphNode?.subgraph;
     for (let index = 0; index < (subgraphNode?.inputs?.length ?? 0); index += 1) {
         const hostInput = subgraphNode.inputs[index];
-        const boundarySlot = subgraph?.inputNode?.slots?.[index];
+        // Current ComfyUI stores the canonical promoted boundary slot directly
+        // on the host input. Keep the positional lookup for older frontends.
+        const boundarySlot = hostInput?._subgraphSlot
+            ?? subgraph?.inputNode?.slots?.[index];
         if (!hostInput?.widgetId || !boundarySlot) continue;
         const hostWidget = subgraphNode.getWidgetFromSlot?.(hostInput)
             ?? subgraphNode.widgets?.find((widget) =>
@@ -276,7 +279,10 @@ function promotedWidgetBindings(subgraphNode) {
             const link = graphLink(subgraph, linkId);
             const target = link ? graphNode(subgraph, link.target_id) : null;
             const targetInput = target?.inputs?.[link?.target_slot];
-            const widgetName = targetInput?.widget?.name ?? targetInput?.name;
+            const targetWidget = target?.getWidgetFromSlot?.(targetInput);
+            const widgetName = targetWidget?.name
+                ?? targetInput?.widget?.name
+                ?? targetInput?.name;
             if (!target || !widgetName) continue;
             if (!bindingsByNode.has(target)) bindingsByNode.set(target, new Map());
             bindingsByNode.get(target).set(widgetName, {hostInput, hostWidget});
@@ -412,7 +418,10 @@ function syncPromotedSelectorWidgets(subgraphNode) {
         subgraphNode._promptLibraryAddendaMirrors.delete(mirrorKey);
         updated = true;
     }
-    if (updated) subgraphNode.setDirtyCanvas?.(true, true);
+    if (updated) {
+        subgraphNode.expandToFitContent?.();
+        subgraphNode.setDirtyCanvas?.(true, true);
+    }
 }
 
 app.registerExtension({
@@ -656,7 +665,8 @@ function promotedWidgetValues(subgraphNode, inheritedOverrides) {
     const subgraph = subgraphNode?.subgraph;
     for (let index = 0; index < (subgraphNode?.inputs?.length ?? 0); index += 1) {
         const hostInput = subgraphNode.inputs[index];
-        const boundarySlot = subgraph?.inputNode?.slots?.[index];
+        const boundarySlot = hostInput?._subgraphSlot
+            ?? subgraph?.inputNode?.slots?.[index];
         if (!hostInput?.widgetId || !boundarySlot) continue;
         const hostWidget = subgraphNode.getWidgetFromSlot?.(hostInput)
             ?? subgraphNode.widgets?.find((widget) =>
@@ -668,7 +678,10 @@ function promotedWidgetValues(subgraphNode, inheritedOverrides) {
             const link = graphLink(subgraph, linkId);
             const target = link ? graphNode(subgraph, link.target_id) : null;
             const targetInput = target?.inputs?.[link?.target_slot];
-            const widgetName = targetInput?.widget?.name ?? targetInput?.name;
+            const targetWidget = target?.getWidgetFromSlot?.(targetInput);
+            const widgetName = targetWidget?.name
+                ?? targetInput?.widget?.name
+                ?? targetInput?.name;
             if (!target || !widgetName) continue;
             if (!valuesByNode.has(target)) valuesByNode.set(target, new Map());
             valuesByNode.get(target).set(widgetName, value);
