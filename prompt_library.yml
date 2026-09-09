@@ -1,37 +1,120 @@
 version: 3
 
-# Every level has a stable machine key and may have a friendly label plus metadata.
-# Stable keys are saved in workflows; labels can be changed without breaking them.
+# This bundled library is a practical, general-purpose example. Stable mapping
+# keys use snake_case; friendly labels remain free to change. Metadata is
+# optional and reserved for filtering, automation, and future workflows.
+
 templates:
-  solo:
-    label: Solo
+  duo:
+    label: "Duo"
     subcategories:
-      general:
-        label: General
+      flexible:
+        label: "Flexible"
         templates:
-          natural_portrait:
-            label: Natural Portrait
+          duo_flexible:
+            label: "Duo Flexible"
             slots:
-              character_a: character
-              outfit_a: outfit
-              pose: pose
-              location: location
-              composition: composition
-              lighting: lighting
-              photography: photography
-              style: style
-              mood: mood
+              character_a: "character"
+              outfit_a: "outfit"
+              pose_a: "pose"
+              character_b: "character"
+              outfit_b: "outfit"
+              pose_b: "pose"
+              combined_pose: "combined_pose"
+              location: "location"
+              atmosphere: "atmosphere"
+              composition: "composition"
+              lighting: "lighting"
+              photography: "photography"
+              style: "style"
             aliases:
-              character_a: Character A
-              outfit_a: Character A
+              character_a: "Character A"
+              outfit_a: "Character A"
+              pose_a: "Character A"
+              character_b: "Character B"
+              outfit_b: "Character B"
+              pose_b: "Character B"
+            defaults:
+              combined_pose: "The two people share the frame with a natural gap and no forced interaction."
+              atmosphere: "Ordinary conditions with no added weather."
+              composition: "Both people stay readable in the frame."
+              style: "Photorealistic still photography."
             template: |-
               {{character_a}}
 
               {{outfit_a}}
 
-              {{pose}}
+              {{pose_a}}
+
+              {{character_b}}
+
+              {{outfit_b}}
+
+              {{pose_b}}
+
+              {{combined_pose}}
 
               {{location}}
+
+              {{atmosphere}}
+
+              {{composition}}
+
+              {{lighting}}
+
+              {{photography}}
+
+              {{style}}
+  solo:
+    label: "Solo"
+    subcategories:
+      flexible:
+        label: "Flexible"
+        templates:
+          solo_flexible:
+            label: "Solo Flexible"
+            slots:
+              character_a: "character"
+              outfit_a: "outfit"
+              pose_a: "pose"
+              action: "action"
+              performance: "performance"
+              location: "location"
+              prop: "prop"
+              atmosphere: "atmosphere"
+              composition: "composition"
+              lighting: "lighting"
+              photography: "photography"
+              style: "style"
+            aliases:
+              character_a: "Character A"
+              outfit_a: "Character A"
+              pose_a: "Character A"
+              action: "Character A"
+              performance: "Character A"
+            defaults:
+              action: "No extra action beyond the chosen pose."
+              performance: "A natural, readable expression."
+              prop: "No extra prop beyond what the location already contains."
+              atmosphere: "Ordinary conditions with no added weather."
+              composition: "Natural placement of the subject in the frame."
+              style: "Photorealistic still photography."
+            template: |-
+              {{character_a}}
+
+              {{outfit_a}}
+
+              {{pose_a}}
+
+              {{action}}
+
+              {{performance}}
+
+              {{location}}
+
+              {{prop}}
+
+              {{atmosphere}}
 
               {{composition}}
 
@@ -41,132 +124,435 @@ templates:
 
               {{style}}
 
-              {{mood}}
-
 categories:
-  characters:
-    label: Characters
-    template_slot: character
-    metadata:
-      tags: [subject]
+  actions:
+    label: "Actions"
+    template_slot: "action"
     subcategories:
-      archetypes:
-        label: Archetypes
-        metadata:
-          tags: [character]
+      everyday:
+        label: "Everyday"
         presets:
-          confident_lead:
-            label: Confident Lead
-            prompt: >-
-              A confident lead character with an assured posture and a calm,
-              direct expression.
+          holds_a_cup:
+            label: "Holds a Cup"
+            prompt: |-
+              {{subject}} holds a cup in one hand as a simple everyday action, without changing the underlying pose.
             metadata:
-              tags: [confident, lead]
-
-  outfits:
-    label: Outfits
-    template_slot: outfit
+              tags: ["action"]
+          opens_a_door:
+            label: "Opens a Door"
+            prompt: |-
+              {{subject}} is opening a door, one hand on the handle, body turning through the doorway.
+            metadata:
+              tags: ["action"]
+  atmosphere:
+    label: "Atmosphere / Weather"
+    template_slot: "atmosphere"
     subcategories:
-      editorial:
-        label: Editorial
+      weather:
+        label: "Weather"
         presets:
-          modern_tailoring:
-            label: Modern Tailoring
-            prompt: >-
-              Wardrobe: clean modern tailoring with a refined editorial
-              silhouette and restrained styling.
+          clear_air:
+            label: "Clear Air"
+            prompt: |-
+              Clear air with no rain, fog, or added weather, visibility clean through the scene.
             metadata:
-              tags: [fashion, tailored]
-
-  poses:
-    label: Poses
-    template_slot: pose
+              tags: ["atmosphere"]
+          light_rain:
+            label: "Light Rain"
+            prompt: |-
+              Light rain in the air, damp surfaces, and a faint mist without turning the location into a different place.
+            metadata:
+              tags: ["atmosphere", "rain"]
+  character_poses:
+    label: "Character Poses"
+    template_slot: "pose"
     subcategories:
+      seated:
+        label: "Seated"
+        presets:
+          sits_naturally:
+            label: "Sits Naturally"
+            prompt: |-
+              {{subject}} sits with a supported spine, feet grounded or easily crossed, hands resting, and the face clearly visible.
+            metadata:
+              tags: ["pose", "seated"]
       standing:
-        label: Standing
+        label: "Standing"
         presets:
-          relaxed_contrapposto:
-            label: Relaxed Contrapposto
-            prompt: >-
-              A relaxed contrapposto stance, weight grounded through one leg,
-              shoulders natural, hands at ease.
-
-  compositions:
-    label: Compositions
-    template_slot: composition
+          stands_naturally:
+            label: "Stands Naturally"
+            prompt: |-
+              {{subject}} stands full-length with weight on one leg, the other knee soft, shoulders relaxed, and the face readable.
+            metadata:
+              tags: ["pose", "standing"]
+      walking:
+        label: "Walking"
+        presets:
+          mid_stride:
+            label: "Mid-Stride"
+            prompt: |-
+              {{subject}} is caught mid-stride, one foot leaving the ground, arms swinging naturally, face still readable.
+            metadata:
+              tags: ["pose", "walking"]
+  characters:
+    label: "Characters"
+    template_slot: "character"
     subcategories:
-      portraits:
-        label: Portraits
+      actors:
+        label: "Actors"
         presets:
-          environmental_rule_of_thirds:
-            label: Environmental Rule of Thirds
-            prompt: >-
-              Compose a wide environmental portrait using the rule of thirds,
-              keeping the subject visually dominant while leaving open space
-              to reveal the surrounding location and create layered depth.
-
+          awkwafina:
+            label: "Awkwafina"
+            prompt: |-
+              {{subject}} as Awkwafina, an adult woman in her thirties, average-to-tall stature, long straight black hair, light-to-medium East Asian skin. Keep a photorealistic adult likeness of Awkwafina.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["actor", "adult"]
+          cillian_murphy:
+            label: "Cillian Murphy"
+            prompt: |-
+              {{subject}} as Cillian Murphy, an adult man in his late forties, tall and lean, short sandy-blond hair, fair skin. Keep a photorealistic adult likeness of Cillian Murphy.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["actor", "adult"]
+          mahershala_ali:
+            label: "Mahershala Ali"
+            prompt: |-
+              {{subject}} as Mahershala Ali, an adult man in his fifties, tall, very short black hair, often a trimmed beard, deep brown skin. Keep a photorealistic adult likeness of Mahershala Ali.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["actor", "adult"]
+          viola_davis:
+            label: "Viola Davis"
+            prompt: |-
+              {{subject}} as Viola Davis, an adult woman in her fifties, medium stature, dark hair worn close to the head, warm deep-brown skin. Keep a photorealistic adult likeness of Viola Davis.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["actor", "adult"]
+      actresses:
+        label: "Actresses"
+        presets:
+          placeholder_actress:
+            label: "Placeholder Actress"
+            prompt: |-
+              {{subject}} is an adult woman cast as an actress likeness placeholder. Keep a stable adult face, natural proportions, and consistent identity until a real actress preset replaces this.
+            negative_prompt: |-
+              teen, child, inconsistent identity
+            metadata:
+              tags: ["placeholder", "actress"]
+      lora_trained_women:
+        label: "Lora Trained Women"
+        presets:
+          placeholder_lora_woman:
+            label: "Placeholder LoRA Woman"
+            prompt: |-
+              {{subject}} is an adult LoRA-trained woman. Use the trained trigger and keep the learned adult identity stable across images.
+            negative_prompt: |-
+              teen, child, inconsistent identity, wrong lora subject
+            metadata:
+              tags: ["placeholder", "lora"]
+      models:
+        label: "Models"
+        presets:
+          adut_akech:
+            label: "Adut Akech"
+            prompt: |-
+              {{subject}} as Adut Akech, an adult woman in her twenties, tall runway stature, very short black hair, deep brown skin. Keep a photorealistic adult likeness of Adut Akech.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["model", "adult"]
+          david_gandy:
+            label: "David Gandy"
+            prompt: |-
+              {{subject}} as David Gandy, an adult man in his forties, tall, short dark brown hair, fair skin. Keep a photorealistic adult likeness of David Gandy.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["model", "adult"]
+          liu_wen:
+            label: "Liu Wen"
+            prompt: |-
+              {{subject}} as Liu Wen, an adult woman in her thirties, tall runway stature, long straight black hair, light East Asian skin. Keep a photorealistic adult likeness of Liu Wen.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["model", "adult"]
+          placeholder_model:
+            label: "Placeholder Model"
+            prompt: |-
+              {{subject}} is an adult woman used as a fashion-model likeness placeholder. Keep a stable adult face, natural stature, and consistent identity until a real model preset replaces this.
+            negative_prompt: |-
+              teen, child, inconsistent identity
+            metadata:
+              tags: ["placeholder", "model"]
+          tyson_beckford:
+            label: "Tyson Beckford"
+            prompt: |-
+              {{subject}} as Tyson Beckford, an adult man in his fifties, tall, close-cropped black hair, medium-deep brown skin. Keep a photorealistic adult likeness of Tyson Beckford.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["model", "adult"]
+      musicians:
+        label: "Musicians"
+        presets:
+          bruno_mars:
+            label: "Bruno Mars"
+            prompt: |-
+              {{subject}} as Bruno Mars, an adult man in his late thirties, shorter stature, short dark hair with a clean line-up, medium-tan skin. Keep a photorealistic adult likeness of Bruno Mars.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["musician", "adult"]
+          celeste_waite:
+            label: "Celeste"
+            prompt: |-
+              {{subject}} as the singer Celeste, an adult woman in her thirties, average stature, dark sculpted hair, medium-brown skin. Keep a photorealistic adult likeness of Celeste.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age, wrong person named Celeste
+            metadata:
+              tags: ["musician", "adult"]
+          jon_batiste:
+            label: "Jon Batiste"
+            prompt: |-
+              {{subject}} as Jon Batiste, an adult man in his thirties, average-to-tall stature, high full black hair, deep brown skin. Keep a photorealistic adult likeness of Jon Batiste.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["musician", "adult"]
+          mitski:
+            label: "Mitski"
+            prompt: |-
+              {{subject}} as Mitski, an adult woman in her thirties, petite-to-average stature, long straight black hair, light East Asian skin. Keep a photorealistic adult likeness of Mitski.
+            negative_prompt: |-
+              teen, child, inconsistent identity, altered age
+            metadata:
+              tags: ["musician", "adult"]
+          placeholder_musician:
+            label: "Placeholder Musician"
+            prompt: |-
+              {{subject}} is an adult woman used as a musician likeness placeholder. Keep a stable adult face and consistent identity until a real musician preset replaces this.
+            negative_prompt: |-
+              teen, child, inconsistent identity
+            metadata:
+              tags: ["placeholder", "musician"]
+      original_women:
+        label: "Original Women"
+        presets:
+          placeholder_original_woman:
+            label: "Placeholder Original Woman"
+            prompt: |-
+              {{subject}} is an original adult woman, not a celebrity. Keep a coherent adult identity, natural face, and consistent stature until a finished original-character preset replaces this.
+            negative_prompt: |-
+              teen, child, celebrity likeness, inconsistent identity
+            metadata:
+              tags: ["placeholder", "original_character"]
+  combined_poses:
+    label: "Combined Poses"
+    template_slot: "combined_pose"
+    subcategories:
+      three_people:
+        label: "Three People"
+        presets:
+          loose_triangle:
+            label: "Loose Triangle"
+            prompt: |-
+              Character A, Character B, and Character C form a loose triangle in the frame. Each person keeps a distinct stance, and all three faces stay readable.
+            metadata:
+              tags: ["combined_pose", "three"]
+      two_people:
+        label: "Two People"
+        presets:
+          share_frame_apart:
+            label: "Share Frame Apart"
+            prompt: |-
+              Character A and Character B occupy the same frame with a clear gap between them. Each keeps a separate stance, and both faces stay readable.
+            metadata:
+              tags: ["combined_pose", "duo"]
+  composition:
+    label: "Composition"
+    template_slot: "composition"
+    subcategories:
+      framing:
+        label: "Framing"
+        presets:
+          full_length_centered:
+            label: "Full Length Centered"
+            prompt: |-
+              Full-length framing with the subject comfortably inside the frame, a little space above the head and below the feet, emphasis on the whole figure.
+            metadata:
+              tags: ["composition"]
+          three_quarter_offset:
+            label: "Three Quarter Offset"
+            prompt: |-
+              Three-quarter crop from mid-thigh up, subject slightly off-center, face remaining the visual anchor.
+            metadata:
+              tags: ["composition"]
   lighting:
-    label: Lighting
-    template_slot: lighting
+    label: "Lighting"
+    template_slot: "lighting"
     subcategories:
-      soft:
-        label: Soft Light
+      daylight:
+        label: "Daylight"
         presets:
-          broad_soft_key:
-            label: Broad Soft Key
-            prompt: >-
-              Illuminate the subject with a broad soft key light, restrained
-              fill, smooth tonal transitions, and gentle dimensional shadows.
-
-  photography:
-    label: Photography
-    template_slot: photography
-    subcategories:
+          window_side_light:
+            label: "Window Side Light"
+            prompt: |-
+              Soft daylight from a large window at one side, gentle falloff across the face, and bounced fill from nearby walls.
+            metadata:
+              tags: ["lighting", "daylight"]
       studio:
-        label: Studio
+        label: "Studio"
         presets:
-          soft_editorial:
-            label: Polished Editorial Photography
-            prompt: >-
-              Render the scene as polished editorial photography with natural
-              perspective, controlled depth of field, realistic texture, and
-              restrained professional finishing.
-
+          soft_key_fill:
+            label: "Soft Key and Fill"
+            prompt: |-
+              A large soft key light from camera-left with a weaker fill from the opposite side, controlled highlights, and open shadows.
+            metadata:
+              tags: ["lighting", "studio"]
   locations:
-    label: Locations
-    template_slot: location
+    label: "Locations"
+    template_slot: "location"
     subcategories:
+      exteriors:
+        label: "Exteriors"
+        presets:
+          city_sidewalk:
+            label: "City Sidewalk"
+            prompt: |-
+              A city sidewalk with storefronts, curb, and ordinary street architecture. Persistent place only, no described camera or lighting recipe.
+            metadata:
+              tags: ["location", "exterior"]
       interiors:
-        label: Interiors
+        label: "Interiors"
         presets:
-          minimal_studio:
-            label: Minimal Studio
-            prompt: >-
-              A minimal studio interior with a clean seamless backdrop and an
-              uncluttered floor plane.
-
-  styles:
-    label: Styles
-    template_slot: style
+          lived_in_apartment:
+            label: "Lived-In Apartment"
+            prompt: |-
+              A lived-in apartment interior with furniture that has been used, scuffed floors, window light on one wall, and no extra set dressing.
+            metadata:
+              tags: ["location", "interior"]
+      studios:
+        label: "Studios"
+        presets:
+          seamless_cyc:
+            label: "Seamless Cyc"
+            prompt: |-
+              A photography studio with a seamless cyc wall, clean floor, and enough empty space for a full-length figure.
+            metadata:
+              tags: ["location", "studio"]
+  outfits:
+    label: "Outfits"
+    template_slot: "outfit"
     subcategories:
+      casual:
+        label: "Casual"
+        presets:
+          simple_day_clothes:
+            label: "Simple Day Clothes"
+            prompt: |-
+              {{subject}} wears ordinary daytime clothes: a well-fitting top, simple trousers or a skirt, and everyday shoes, fabric hanging with real weight.
+            metadata:
+              tags: ["outfit", "casual"]
+      formal:
+        label: "Formal"
+        presets:
+          tailored_evening:
+            label: "Tailored Evening"
+            prompt: |-
+              {{subject}} wears a tailored evening outfit with clean seams, controlled drape, and shoes that match the formality of the clothes.
+            metadata:
+              tags: ["outfit", "formal"]
+  performance:
+    label: "Performance"
+    template_slot: "performance"
+    subcategories:
+      expression:
+        label: "Expression"
+        presets:
+          calm_attention:
+            label: "Calm Attention"
+            prompt: |-
+              {{subject}} looks toward the camera with a calm, attentive expression, mouth relaxed, eyes easy.
+            metadata:
+              tags: ["performance"]
+      gaze:
+        label: "Gaze"
+        presets:
+          looks_off:
+            label: "Looks Off Camera"
+            prompt: |-
+              {{subject}} looks just off camera, as if noticing something in the room rather than performing for the lens.
+            metadata:
+              tags: ["performance"]
+  photography:
+    label: "Photography"
+    template_slot: "photography"
+    subcategories:
+      angles:
+        label: "Angles"
+        presets:
+          eye_level:
+            label: "Eye Level"
+            prompt: |-
+              Camera at eye level, horizon true, no Dutch tilt, a straightforward viewing angle.
+            metadata:
+              tags: ["photography", "angle"]
+      cameras:
+        label: "Cameras"
+        presets:
+          full_frame_portrait:
+            label: "Full Frame Portrait"
+            prompt: |-
+              Shot on a full-frame still camera at a natural portrait distance, moderate depth of field, and a clean photographic finish.
+            metadata:
+              tags: ["photography"]
+  props:
+    label: "Props / Vehicles"
+    template_slot: "prop"
+    subcategories:
+      handheld:
+        label: "Handheld"
+        presets:
+          paperback_book:
+            label: "Paperback Book"
+            prompt: |-
+              A worn paperback book with a bent cover and visible page edges, small enough to hold in one hand.
+            metadata:
+              tags: ["prop"]
+      vehicles:
+        label: "Vehicles"
+        presets:
+          parked_sedan:
+            label: "Parked Sedan"
+            prompt: |-
+              An ordinary parked sedan with closed doors, realistic paint wear, and no driver visible in the description of the vehicle itself.
+            metadata:
+              tags: ["vehicle"]
+  style:
+    label: "Style / Medium"
+    template_slot: "style"
+    subcategories:
+      illustration:
+        label: "Illustration"
+        presets:
+          painted_illustration:
+            label: "Painted Illustration"
+            prompt: |-
+              A traditional painted illustration with visible brushwork, designed color, and hand-made edges rather than a photograph.
+            metadata:
+              tags: ["style", "illustration"]
       photographic:
-        label: Photographic
+        label: "Photographic"
         presets:
-          cinematic_realism:
-            label: Cinematic Realism
-            prompt: >-
-              Cinematic photographic realism with natural texture, balanced
-              color, and subtle filmic depth.
-
-  expressions:
-    label: Performance and Mood
-    template_slot: mood
-    subcategories:
-      subtle:
-        label: Subtle
-        presets:
-          quiet_confidence:
-            label: Quiet Confidence
-            prompt: >-
-              A quietly confident expression with relaxed features and steady,
-              attentive eyes.
+          photographic_realism:
+            label: "Photographic Realism"
+            prompt: |-
+              Photorealistic still photography with natural skin texture, believable materials, and no illustration or painterly treatment.
+            metadata:
+              tags: ["style", "photo"]
