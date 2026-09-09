@@ -150,6 +150,16 @@ function widgetValue(node, name, overrides) {
     return node.widgets?.find((widget) => widget.name === name)?.value;
 }
 
+function normalizeSeedWidget(widget) {
+    if (!widget) return false;
+    const numeric = Number(widget.value);
+    if (Number.isFinite(numeric) && Number.isInteger(numeric) && numeric >= 0) {
+        return false;
+    }
+    widget.value = 0;
+    return true;
+}
+
 function selectedLibraryEntry(node, overrides) {
     const enabled = widgetValue(node, "enabled", overrides) !== false;
     const categoryKey = widgetValue(node, "category", overrides);
@@ -234,7 +244,11 @@ function syncPromotedSelectorWidgets(subgraphNode) {
         const category = resolvedWidget("category");
         const subcategory = resolvedWidget("subcategory");
         const preset = resolvedWidget("preset");
+        const seed = resolvedWidget("seed");
         if (!bindings.size) continue;
+
+        const seedUpdated = normalizeSeedWidget(seed);
+        updated ||= seedUpdated;
 
         const before = JSON.stringify([
             category?.value, category?.options?.values,
@@ -265,6 +279,11 @@ app.registerExtension({
 
     loadedGraphNode(node) {
         if (![NODE_TYPE, TEMPLATE_COMPOSER_NODE_TYPE].includes(node.comfyClass)) return;
+        if (node.comfyClass === NODE_TYPE) {
+            normalizeSeedWidget(
+                node.widgets?.find((widget) => widget.name === "seed"),
+            );
+        }
         if (lastLibraryCatalog) {
             setTimeout(() => node._applyPromptLibraryCatalog?.(lastLibraryCatalog), 0);
         }
@@ -287,6 +306,10 @@ app.registerExtension({
         const subcategory = node.widgets?.find((widget) => widget.name === "subcategory");
         const preset = node.widgets?.find((widget) => widget.name === "preset");
         if (!category || !subcategory || !preset) return;
+
+        normalizeSeedWidget(
+            node.widgets?.find((widget) => widget.name === "seed"),
+        );
 
         let catalog = [];
 

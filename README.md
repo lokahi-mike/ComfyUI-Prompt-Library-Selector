@@ -54,6 +54,11 @@ of hunting through workflows.
 - Live selected-prompt preview
 - Resolved friendly preset-name output for labels, overlays, and filenames
 
+The Random seed is always a non-negative integer. To reroll a Random preset,
+change or increment the seed; the Selector intentionally does not use
+ComfyUI's after-generation `randomize` mode because promoted subgraph widgets
+can confuse that mode string with the numeric seed value.
+
 ### Template Composer
 
 - Cascading **Template Category → Template Subcategory → Template** selection

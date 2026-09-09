@@ -127,6 +127,14 @@ class NodeIntegrationTests(unittest.TestCase):
         self.assertEqual(result[3]["segments"][0]["variable"], "character_a")
         self.assertEqual(result[4], "Alpha")
 
+    def test_selector_seed_is_numeric_without_after_generate_mode(self):
+        seed_type, seed_options = (
+            self.nodes.PromptLibrarySelector.INPUT_TYPES()["optional"]["seed"]
+        )
+        self.assertEqual(seed_type, "INT")
+        self.assertEqual(seed_options["default"], 0)
+        self.assertNotIn("control_after_generate", seed_options)
+
     def test_template_composer_assigns_repeated_sources_and_template_aliases(self):
         selector = self.nodes.PromptLibrarySelector()
         first = selector.select_prompt("characters", "people", "alpha")["result"][3]

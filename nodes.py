@@ -145,7 +145,6 @@ class PromptLibrarySelector:
                         "default": 0,
                         "min": 0,
                         "max": 0xFFFFFFFFFFFFFFFF,
-                        "control_after_generate": True,
                     },
                 ),
                 "prompt_override": (
