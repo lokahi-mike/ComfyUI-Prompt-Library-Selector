@@ -165,6 +165,21 @@ function normalizeSeedWidget(widget) {
     return true;
 }
 
+function setWidgetHidden(node, widget, hidden) {
+    if (!widget) return false;
+    const changed = widget.hidden !== hidden || widget.options?.hidden !== hidden;
+    widget.hidden = hidden;
+    widget.options ??= {};
+    widget.options.hidden = hidden;
+    if (changed && node?.id != null) {
+        // Nodes 2.0 snapshots visibility into its widget store at registration.
+        // Re-registering the same widget/type refreshes that visibility record
+        // while retaining the workflow's current Boolean value.
+        widget.setNodeId?.(node.id);
+    }
+    return changed;
+}
+
 function selectedLibraryEntry(node, overrides) {
     const enabled = widgetValue(node, "enabled", overrides) !== false;
     const categoryKey = widgetValue(node, "category", overrides);
@@ -321,11 +336,8 @@ function syncPromotedAddendaControls(
             binding.hostInput.label = label;
             updated = true;
         }
-        const hidden = !addendum;
-        if (widget.hidden !== hidden) {
-            widget.hidden = hidden;
-            updated = true;
-        }
+        const visibilityUpdated = setWidgetHidden(subgraphNode, widget, !addendum);
+        updated ||= visibilityUpdated;
         if (addendum && identityChanged) {
             widget.value = Boolean(addendum.default_enabled);
             updated = true;
@@ -454,7 +466,7 @@ app.registerExtension({
                 if (!widget) continue;
                 const addendum = selectedPreset?.addenda?.[index];
                 widget.label = addendum ? `Add: ${addendum.label}` : `Unused addendum ${index + 1}`;
-                widget.hidden = !addendum;
+                setWidgetHidden(node, widget, !addendum);
                 widget.computedDisabled = !addendum;
                 const slot = node.getSlotFromWidget?.(widget);
                 if (slot) slot.label = widget.label;
