@@ -27,7 +27,7 @@ JSON in Markdown fences. Use this outer form:
 Every reusable snippet is a preset item with:
 - type: "preset"
 - category: an object containing stable key, friendly label, and optionally
-  template_slot
+  template_slot; imported addenda automatically create missing category controls
 - subcategory: an object containing stable key and friendly label
 - key: a stable snake_case identifier
 - label: a friendly display name
@@ -69,9 +69,11 @@ entry, aliases are used only when subject substitution is needed, and all
 newlines inside JSON strings are escaped correctly.
 ```
 
-Addenda are optional extensions to a preset. Each addendum has a stable key,
-friendly label, and any combination of `prompt`, `negative_prompt`, and
-`tags`. Set `default_enabled` to `true` only when the fragment should be active
+Addenda are optional extensions to a preset. Their stable keys identify shared
+controls at the category level; the Workbench automatically adds a missing
+category control when importing an addendum. Each addendum has a friendly label
+and any combination of `prompt`, `negative_prompt`, and `tags`. Set
+`default_enabled` to `true` only when the fragment should be active
 until the user explicitly disables it. Keep the base preset complete and use
 addenda for genuinely optional detail rather than splitting it into dozens of
 tiny required fragments.

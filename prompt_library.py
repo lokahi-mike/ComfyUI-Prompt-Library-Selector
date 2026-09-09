@@ -161,6 +161,7 @@ class PromptLibrary:
         for category_key, category in self._sorted_items(data["categories"]):
             category = self._mapping(category, f"category '{category_key}'")
             category_tags = self._tags(category)
+            addenda_slots = self._addenda_slots(category)
             subcategories = []
             for subcategory_key, subcategory in self._sorted_items(category.get("subcategories", {})):
                 subcategory = self._mapping(subcategory, f"subcategory '{subcategory_key}'")
@@ -173,13 +174,14 @@ class PromptLibrary:
                         "negative_prompt": str(preset.get("negative_prompt", "") or ""),
                         "template_slot": str(preset.get("template_slot", "") or ""),
                         "tags": deduplicate((*category_tags, *subcategory_tags, *self._tags(preset))),
-                        "addenda": self._addenda(preset),
+                        "addenda": self._addenda(preset, addenda_slots),
                     })
                 subcategories.append({"key": str(subcategory_key), "label": self._label(subcategory_key, subcategory), "tags": subcategory_tags, "presets": presets})
             categories.append({
                 "key": str(category_key), "label": self._label(category_key, category),
                 "template_slot": str(category.get("template_slot", "") or ""),
-                "tags": category_tags, "subcategories": subcategories,
+                "tags": category_tags, "addenda_slots": addenda_slots,
+                "subcategories": subcategories,
             })
 
         templates = []
@@ -233,7 +235,7 @@ class PromptLibrary:
             "negative_prompt": str(entry.get("negative_prompt", "") or ""),
             "template_slot": str(entry.get("template_slot") or category_data.get("template_slot") or category),
             "tags": deduplicate((*self._tags(category_data), *self._tags(subcategory_data), *self._tags(entry))),
-            "addenda": self._addenda(entry),
+            "addenda": self._addenda(entry, self._addenda_slots(category_data)),
         }
 
     def resolve(self, category: str, subcategory: str, preset: str) -> str:
@@ -300,22 +302,44 @@ class PromptLibrary:
         return [tags] if isinstance(tags, str) else deduplicate(tags if isinstance(tags, list) else [])
 
     @classmethod
-    def _addenda(cls, value: dict[str, Any]) -> list[dict[str, Any]]:
+    def _addenda_slots(cls, value: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = value.get("addenda_slots", {}) or {}
+        if not isinstance(raw, dict):
+            return []
+        result = []
+        for key, raw_slot in cls._sorted_items(raw):
+            slot = cls._entry_mapping(raw_slot)
+            result.append({
+                "key": str(key),
+                "label": cls._label(key, slot),
+                "default_enabled": bool(slot.get("default_enabled", False)),
+            })
+        return result[:8]
+
+    @classmethod
+    def _addenda(
+        cls, value: dict[str, Any], slots: list[dict[str, Any]] | None = None
+    ) -> list[dict[str, Any]]:
         raw = value.get("addenda", {}) or {}
         if not isinstance(raw, dict):
             return []
         result = []
-        for key, raw_addendum in cls._sorted_items(raw):
+        slot_items = [(slot["key"], slot) for slot in (slots or [])]
+        items = slot_items or list(cls._sorted_items(raw))
+        for key, slot in items:
+            raw_addendum = raw.get(key, {}) if slot_items else slot
             addendum = cls._entry_mapping(raw_addendum)
             result.append({
                 "key": str(key),
-                "label": cls._label(key, addendum),
+                "label": str(slot.get("label") or cls._label(key, addendum)),
                 "prompt": str(addendum.get("prompt", "") or ""),
                 "negative_prompt": str(addendum.get("negative_prompt", "") or ""),
-                "default_enabled": bool(addendum.get("default_enabled", False)),
+                "default_enabled": bool(addendum.get(
+                    "default_enabled", slot.get("default_enabled", False)
+                )),
                 "tags": cls._tags(addendum),
             })
-        return result
+        return result[:8]
 
     @staticmethod
     def _label(key: Any, value: dict[str, Any]) -> str:

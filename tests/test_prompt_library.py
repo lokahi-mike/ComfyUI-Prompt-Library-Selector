@@ -60,6 +60,11 @@ categories:
   characters:
     label: Characters
     template_slot: character
+    addenda_slots:
+      freckles:
+        label: Freckles
+      identity_guardrails:
+        label: Identity Guardrails
     metadata:
       tags: [subject]
     subcategories:
@@ -166,6 +171,10 @@ class PromptLibraryTests(unittest.TestCase):
             "Natural",
         )
         preset = catalog["categories"][0]["subcategories"][0]["presets"][0]
+        self.assertEqual(
+            [item["key"] for item in catalog["categories"][0]["addenda_slots"]],
+            ["freckles", "identity_guardrails"],
+        )
         self.assertEqual(preset["negative_prompt"], "distorted face")
         self.assertEqual(preset["template_slot"], "")
         self.assertEqual(preset["tags"], ["subject", "adult", "original"])
@@ -174,6 +183,12 @@ class PromptLibraryTests(unittest.TestCase):
             ["freckles", "identity_guardrails"],
         )
         self.assertTrue(preset["addenda"][1]["default_enabled"])
+        second_preset = catalog["categories"][0]["subcategories"][0]["presets"][1]
+        self.assertEqual(
+            [item["key"] for item in second_preset["addenda"]],
+            ["freckles", "identity_guardrails"],
+        )
+        self.assertTrue(all(not item["prompt"] for item in second_preset["addenda"]))
 
     def test_flat_v2_templates_are_exposed_under_general_groups(self):
         self.path.write_text(SAMPLE_FLAT_V2, encoding="utf-8")

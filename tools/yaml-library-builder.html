@@ -558,6 +558,9 @@
       for (const category of data.categories) {
         category.id ||= makeId();
         category.tags = Array.isArray(category.tags) ? category.tags : [];
+        category.addendaSlots = Array.isArray(category.addendaSlots) ? category.addendaSlots : [];
+        category.addendaSlots = Array.isArray(category.addendaSlots) ? category.addendaSlots : [];
+        for (const slot of category.addendaSlots) normalizeAddendaSlot(slot);
         category.subcategories = Array.isArray(category.subcategories) ? category.subcategories : [];
         category.templateSlot = String(category.templateSlot ?? suggestedTemplateSlot(category.key));
         category.autoKey ??= false;
@@ -576,6 +579,31 @@
             for (const addendum of preset.addenda) normalizeAddendum(addendum);
           }
         }
+        if (!category.addendaSlots.length) {
+          const seen = new Set();
+          for (const subcategory of category.subcategories) for (const preset of subcategory.presets) {
+            for (const addendum of preset.addenda) if (!seen.has(addendum.key)) {
+              seen.add(addendum.key);
+              category.addendaSlots.push(newAddendaSlot(addendum.label, addendum.key));
+            }
+          }
+        }
+        if (!category.addendaSlots.length) {
+          const inferred = new Map();
+          for (const subcategory of category.subcategories) for (const preset of subcategory.presets) {
+            for (const addendum of preset.addenda) if (!inferred.has(addendum.key)) {
+              inferred.set(addendum.key, newAddendaSlot(addendum.label, addendum.key));
+            }
+          }
+          category.addendaSlots = [...inferred.values()].slice(0, 8);
+        }
+        for (const slot of category.addendaSlots.slice(0, 8)) {
+          slot.id ||= makeId();
+          slot.label = String(slot.label ?? slot.key ?? "Untitled Addendum");
+          slot.key = String(slot.key ?? slugify(slot.label));
+          slot.autoKey ??= false;
+        }
+        category.addendaSlots = category.addendaSlots.slice(0, 8);
       }
       return data;
     }
@@ -602,6 +630,14 @@
       addendum.defaultEnabled = Boolean(addendum.defaultEnabled ?? addendum.default_enabled ?? false);
       addendum.autoKey ??= false;
       return addendum;
+    }
+
+    function normalizeAddendaSlot(slot) {
+      slot.id ||= makeId();
+      slot.label = String(slot.label ?? slot.key ?? "Untitled Addendum Slot");
+      slot.key = String(slot.key ?? slugify(slot.label));
+      slot.autoKey ??= false;
+      return slot;
     }
 
     function suggestedTemplateSlot(key) {
@@ -878,6 +914,7 @@
       }
       sortByLabel(state.categories);
       for (const category of state.categories) {
+        sortByLabel(category.addendaSlots);
         sortByLabel(category.subcategories);
         for (const subcategory of category.subcategories) sortByLabel(subcategory.presets);
       }
@@ -918,7 +955,7 @@
     }
 
     function newCategory(label = "New Category") {
-      return { id: makeId(), key: slugify(label), label, tags: [], subcategories: [], templateSlot: "", autoKey: true };
+      return { id: makeId(), key: slugify(label), label, tags: [], addendaSlots: [], subcategories: [], templateSlot: "", autoKey: true };
     }
 
     function newSubcategory(label = "New Subcategory") {
@@ -931,6 +968,20 @@
 
     function newAddendum(label = "New Addendum") {
       return { id: makeId(), key: slugify(label), label, prompt: "", negativePrompt: "", tags: [], defaultEnabled: false, autoKey: true };
+    }
+
+    function newAddendaSlot(label = "New Addendum Slot", key = "") {
+      return { id: makeId(), key: key || slugify(label), label, autoKey: !key };
+    }
+
+    function resolvedPresetAddenda(entry) {
+      if (!entry?.preset || !entry?.category) return [];
+      return entry.category.addendaSlots.map((slot) => {
+        const value = entry.preset.addenda.find((item) => item.key === slot.key);
+        return value
+          ? {...value, key: slot.key, label: slot.label}
+          : {key: slot.key, label: slot.label, prompt: "", negativePrompt: "", tags: [], defaultEnabled: false};
+      });
     }
 
     function newTemplateCategory(label = "New Template Category") {
@@ -1053,6 +1104,7 @@
       form.append(stableKeyField(found));
       if (selection.type === "category") {
         form.append(field("Default template slot", "templateSlot", found.item.templateSlot, "Used as the {{variable}} name for presets in this category. Leave empty to use the category stable key."));
+        form.append(addendaSlotsEditor(found.item));
       }
       const metadata = document.createElement("details");
       metadata.className = "metadata";
@@ -1064,7 +1116,7 @@
         const guidance = document.createElement("div"); guidance.id = "presetGuidance"; form.append(guidance);
         form.append(field("Negative prompt", "negativePrompt", found.item.negativePrompt, "Stored and composed separately for models and workflows that support negative conditioning.", true));
         form.append(field("Template slot override", "templateSlot", found.item.templateSlot, "Optional {{variable}} name for this preset; otherwise the category default is used."));
-        form.append(addendaEditor(found.item));
+        form.append(addendaEditor(found.category, found.item));
         queueMicrotask(updatePresetGuidance);
       }
 
@@ -1139,34 +1191,103 @@
       return label;
     }
 
-    function addendaEditor(preset) {
+    function addendaSlotsEditor(category) {
       const details = document.createElement("details");
       details.className = "metadata addenda-editor";
-      details.open = Boolean(preset.addenda.length);
+      details.open = Boolean(category.addendaSlots.length);
       const summary = document.createElement("summary");
-      summary.textContent = `Optional addenda (${preset.addenda.length})`;
+      summary.textContent = `Category addendum controls (${category.addendaSlots.length})`;
       details.append(summary);
       const head = document.createElement("div");
       head.className = "addenda-head";
       const hint = document.createElement("span");
       hint.className = "hint";
-      hint.textContent = "Toggleable prompt fragments offered by this preset.";
+      hint.textContent = "Stable checkbox controls shared by every preset in this category (maximum 8).";
       const add = document.createElement("button");
       add.type = "button";
       add.className = "compact";
-      add.textContent = "+ Addendum";
+      add.textContent = "+ Control";
+      add.disabled = category.addendaSlots.length >= 8;
       add.addEventListener("click", () => {
-        preset.addenda.push(newAddendum());
+        if (category.addendaSlots.length < 8) category.addendaSlots.push(newAddendaSlot());
         render();
       });
       head.append(hint, add);
       details.append(head);
-      for (const addendum of preset.addenda) {
+      for (const slot of category.addendaSlots) {
         const card = document.createElement("div");
         card.className = "addendum-card";
+        for (const [caption, property] of [["Control label", "label"], ["Stable key", "key"]]) {
+          const label = document.createElement("label");
+          label.textContent = caption;
+          const input = document.createElement("input");
+          input.value = slot[property];
+          input.addEventListener("input", () => {
+            const oldKey = slot.key;
+            slot[property] = input.value;
+            if (property === "label" && slot.autoKey) {
+              slot.key = slugify(input.value);
+              const keyInput = card.querySelectorAll("input")[1];
+              if (keyInput) keyInput.value = slot.key;
+            }
+            if (property === "key") slot.autoKey = false;
+            if (oldKey !== slot.key) for (const subcategory of category.subcategories) for (const preset of subcategory.presets) {
+              const addendum = preset.addenda.find((item) => item.key === oldKey);
+              if (addendum) addendum.key = slot.key;
+            }
+            renderWithoutEditor();
+          });
+          label.append(input);
+          card.append(label);
+        }
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "compact danger";
+        remove.textContent = "Remove control";
+        remove.addEventListener("click", () => {
+          category.addendaSlots = category.addendaSlots.filter((item) => item.id !== slot.id);
+          for (const subcategory of category.subcategories) for (const preset of subcategory.presets) {
+            preset.addenda = preset.addenda.filter((item) => item.key !== slot.key);
+          }
+          render();
+        });
+        card.append(remove);
+        details.append(card);
+      }
+      return details;
+    }
+
+    function addendaEditor(category, preset) {
+      const details = document.createElement("details");
+      details.className = "metadata addenda-editor";
+      details.open = Boolean(category.addendaSlots.length);
+      const summary = document.createElement("summary");
+      summary.textContent = `Category addenda content (${category.addendaSlots.length})`;
+      details.append(summary);
+      const head = document.createElement("div");
+      head.className = "addenda-head";
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = category.addendaSlots.length
+        ? "Text contributed by this preset when each category control is enabled."
+        : "Add controls on the category first.";
+      head.append(hint);
+      details.append(head);
+      for (const slot of category.addendaSlots) {
+        let addendum = preset.addenda.find((item) => item.key === slot.key);
+        if (!addendum) {
+          addendum = newAddendum(slot.label);
+          addendum.key = slot.key;
+          addendum.autoKey = false;
+          preset.addenda.push(addendum);
+        }
+        addendum.label = slot.label;
+        const card = document.createElement("div");
+        card.className = "addendum-card";
+        const title = document.createElement("strong");
+        title.textContent = slot.label;
+        card.append(title);
         card.append(
-          addendumField(addendum, "Friendly label", "label"),
-          addendumField(addendum, "Stable key", "key"),
           addendumField(addendum, "Positive prompt", "prompt", true),
           addendumField(addendum, "Negative prompt", "negativePrompt", true),
           addendumField(addendum, "Metadata tags", "tags"),
@@ -1183,15 +1304,7 @@
           renderWithoutEditor();
         });
         defaultLabel.append(defaultToggle, document.createTextNode("Enabled by default"));
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "compact danger";
-        remove.textContent = "Remove";
-        remove.addEventListener("click", () => {
-          preset.addenda = preset.addenda.filter((item) => item.id !== addendum.id);
-          render();
-        });
-        actions.append(defaultLabel, remove);
+        actions.append(defaultLabel);
         card.append(actions);
         details.append(card);
       }
@@ -1772,16 +1885,17 @@
         negative.addEventListener("input", () => { override.negative = negative.value; updatePlaygroundOutput(); });
         editActions.append(loadSelected, resetEdit); details.append(editActions, positive, negative);
         const addendaKey = entry ? `${variable}:${entry.preset.id}` : "";
+        const availableAddenda = resolvedPresetAddenda(entry);
         if (entry && !Array.isArray(playground.addenda[addendaKey])) {
-          playground.addenda[addendaKey] = entry.preset.addenda.filter((item) => item.defaultEnabled).map((item) => item.key);
+          playground.addenda[addendaKey] = availableAddenda.filter((item) => item.defaultEnabled).map((item) => item.key);
         }
         const enabledAddenda = new Set(addendaKey ? playground.addenda[addendaKey] : []);
         let addendaBox = null;
-        if (entry?.preset.addenda.length) {
+        if (availableAddenda.length) {
           addendaBox = document.createElement("details");
           addendaBox.className = "metadata";
           addendaBox.innerHTML = "<summary>Optional addenda</summary>";
-          for (const addendum of entry.preset.addenda) {
+          for (const addendum of availableAddenda) {
             const label = document.createElement("label");
             label.className = "checkbox-field";
             const toggle = document.createElement("input");
@@ -1801,8 +1915,8 @@
         box.append(head, select);
         if (addendaBox) box.append(addendaBox);
         box.append(details); slots.append(box);
-        const chosenAddenda = (entry?.preset.addenda ?? []).filter((item) => enabledAddenda.has(item.key));
-        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join("\n\n");
+        const chosenAddenda = availableAddenda.filter((item) => enabledAddenda.has(item.key));
+        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join(" ");
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         for (const negativePrompt of [override.negative.trim() || entry?.preset.negativePrompt || "", ...chosenAddenda.map((item) => item.negativePrompt)]) if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? []), ...chosenAddenda.flatMap((item) => item.tags)]) tags.add(tag);
@@ -1835,12 +1949,13 @@
         const override = playground.overrides[variable] ?? { positive: "", negative: "" };
         const defaultValue = template.defaults?.[variable] ?? "";
         const addendaKey = entry ? `${variable}:${entry.preset.id}` : "";
+        const availableAddenda = resolvedPresetAddenda(entry);
         if (entry && !Array.isArray(playground.addenda[addendaKey])) {
-          playground.addenda[addendaKey] = entry.preset.addenda.filter((item) => item.defaultEnabled).map((item) => item.key);
+          playground.addenda[addendaKey] = availableAddenda.filter((item) => item.defaultEnabled).map((item) => item.key);
         }
         const enabledAddenda = new Set(addendaKey ? playground.addenda[addendaKey] : []);
-        const chosenAddenda = (entry?.preset.addenda ?? []).filter((item) => enabledAddenda.has(item.key));
-        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join("\n\n");
+        const chosenAddenda = availableAddenda.filter((item) => enabledAddenda.has(item.key));
+        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join(" ");
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         for (const negativePrompt of [override.negative.trim() || entry?.preset.negativePrompt || "", ...chosenAddenda.map((item) => item.negativePrompt)]) if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? []), ...chosenAddenda.flatMap((item) => item.tags)]) tags.add(tag);
@@ -2008,6 +2123,12 @@
           subcategory.templates.push(template);
           templateSelection = { type: "template", id: template.id };
         } else {
+          for (const addendum of item.addenda) {
+            if (!category.addendaSlots.some((slot) => slot.key === addendum.key)
+                && category.addendaSlots.length < 8) {
+              category.addendaSlots.push(newAddendaSlot(addendum.label, addendum.key));
+            }
+          }
           const preset = newPreset(item.label);
           Object.assign(preset, { key: item.key, autoKey: false, prompt: item.prompt, negativePrompt: item.negativePrompt, templateSlot: item.templateSlot, tags: item.tags, addenda: item.addenda });
           subcategory.presets.push(preset);
@@ -2112,6 +2233,9 @@
       }
       for (const category of state.categories) {
         if (category.templateSlot && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(category.templateSlot)) errors.push(`Template slot “${category.templateSlot}” is invalid`);
+        checkGroup(category.addendaSlots, `${category.key || "category"} addendum controls`);
+        if (category.addendaSlots.length > 8) errors.push(`${category.key || "category"} has more than 8 addendum controls`);
+        const slotKeys = new Set(category.addendaSlots.map((slot) => slot.key));
         checkGroup(category.subcategories, category.key || "category");
         for (const subcategory of category.subcategories) {
           checkGroup(subcategory.presets, subcategory.key || "subcategory");
@@ -2119,7 +2243,7 @@
             if (preset.templateSlot && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(preset.templateSlot)) errors.push(`Template slot “${preset.templateSlot}” is invalid`);
             checkGroup(preset.addenda, `${category.key}/${subcategory.key}/${preset.key} addenda`);
             for (const addendum of preset.addenda) {
-              if (!addendum.prompt.trim() && !addendum.negativePrompt.trim() && !addendum.tags.length) errors.push(`Addendum “${addendum.key}” is empty`);
+              if (!slotKeys.has(addendum.key)) errors.push(`Addendum “${addendum.key}” is not declared by category “${category.key}”`);
             }
           }
         }
@@ -2146,13 +2270,17 @@
         })),
         categories: data.categories.map((category) => ({
           key: category.key, label: category.label, templateSlot: category.templateSlot, tags: category.tags,
+          addendaSlots: category.addendaSlots.map((slot) => ({key: slot.key, label: slot.label})),
           subcategories: category.subcategories.map((subcategory) => ({
             key: subcategory.key, label: subcategory.label, tags: subcategory.tags,
             presets: subcategory.presets.map((preset) => ({
               key: preset.key, label: preset.label, prompt: preset.prompt,
               negativePrompt: preset.negativePrompt, templateSlot: preset.templateSlot, tags: preset.tags,
-              addenda: preset.addenda.map((addendum) => ({
-                key: addendum.key, label: addendum.label, prompt: addendum.prompt,
+              addenda: preset.addenda.filter((addendum) =>
+                addendum.prompt.trim() || addendum.negativePrompt.trim()
+                || addendum.defaultEnabled || addendum.tags.length
+              ).map((addendum) => ({
+                key: addendum.key, prompt: addendum.prompt,
                 negativePrompt: addendum.negativePrompt, tags: addendum.tags,
                 defaultEnabled: addendum.defaultEnabled,
               })),
@@ -2212,6 +2340,12 @@
         lines.push(`  ${keyLine(category.key)}:`, `    label: ${quote(category.label)}`);
         if (category.templateSlot.trim()) lines.push(`    template_slot: ${quote(category.templateSlot.trim())}`);
         if (category.tags.length) lines.push("    metadata:", `      tags: ${tagYaml(category.tags)}`);
+        if (category.addendaSlots.length) {
+          lines.push("    addenda_slots:");
+          for (const slot of category.addendaSlots) {
+            lines.push(`      ${keyLine(slot.key)}:`, `        label: ${quote(slot.label)}`);
+          }
+        }
         lines.push("    subcategories:");
         if (!category.subcategories.length) lines.push("      {}");
         for (const subcategory of category.subcategories) {
@@ -2224,10 +2358,13 @@
             if (preset.negativePrompt.trim()) lines.push("            negative_prompt: |-", indentPrompt(preset.negativePrompt, 14));
             if (preset.templateSlot.trim()) lines.push(`            template_slot: ${quote(preset.templateSlot.trim())}`);
             if (preset.tags.length) lines.push("            metadata:", `              tags: ${tagYaml(preset.tags)}`);
-            if (preset.addenda.length) {
+            const populatedAddenda = preset.addenda.filter((addendum) =>
+              addendum.prompt.trim() || addendum.negativePrompt.trim()
+              || addendum.defaultEnabled || addendum.tags.length);
+            if (populatedAddenda.length) {
               lines.push("            addenda:");
-              for (const addendum of preset.addenda) {
-                lines.push(`              ${keyLine(addendum.key)}:`, `                label: ${quote(addendum.label)}`);
+              for (const addendum of populatedAddenda) {
+                lines.push(`              ${keyLine(addendum.key)}:`);
                 if (addendum.prompt.trim()) lines.push("                prompt: |-", indentPrompt(addendum.prompt, 18));
                 if (addendum.negativePrompt.trim()) lines.push("                negative_prompt: |-", indentPrompt(addendum.negativePrompt, 18));
                 if (addendum.defaultEnabled) lines.push("                default_enabled: true");
@@ -2250,6 +2387,8 @@
       let flatTemplate = false;
       let templateMapSection = null;
       let category = null;
+      let categoryMapSection = null;
+      let addendaSlot = null;
       let subcategory = null;
       let preset = null;
       let addendum = null;
@@ -2324,10 +2463,26 @@
           category.key = keyMatch[1];
           category.autoKey = false;
           data.categories.push(category);
+          categoryMapSection = null;
+          addendaSlot = null;
           subcategory = preset = null;
           continue;
         }
-        if (section === "categories" && indent === 6 && keyMatch && category) {
+        if (section === "categories" && indent === 4 && text === "addenda_slots:" && category) {
+          categoryMapSection = "addenda_slots";
+          continue;
+        }
+        if (section === "categories" && indent === 4 && text === "subcategories:" && category) {
+          categoryMapSection = "subcategories";
+          addendaSlot = null;
+          continue;
+        }
+        if (section === "categories" && indent === 6 && keyMatch && category && categoryMapSection === "addenda_slots") {
+          addendaSlot = newAddendaSlot(keyMatch[1], keyMatch[1]);
+          category.addendaSlots.push(addendaSlot);
+          continue;
+        }
+        if (section === "categories" && indent === 6 && keyMatch && category && categoryMapSection !== "addenda_slots") {
           subcategory = newSubcategory(keyMatch[1]);
           subcategory.key = keyMatch[1];
           subcategory.autoKey = false;
@@ -2383,7 +2538,8 @@
             if (section === "templates" && indent === 8 && templateSubcategory) templateSubcategory.label = value;
             if (section === "templates" && indent === 12 && template) template.label = value;
             if (section === "categories" && indent === 4 && category) category.label = value;
-            if (section === "categories" && indent === 8 && subcategory) subcategory.label = value;
+            if (section === "categories" && indent === 8 && addendaSlot && categoryMapSection === "addenda_slots") addendaSlot.label = value;
+            if (section === "categories" && indent === 8 && subcategory && categoryMapSection !== "addenda_slots") subcategory.label = value;
             if (section === "categories" && indent === 12 && preset) preset.label = value;
           } else if (valueMatch[1] === "tags") {
             const tags = parseTags(valueMatch[2]);

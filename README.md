@@ -61,13 +61,13 @@ change or increment the seed; the Selector intentionally does not use
 ComfyUI's after-generation `randomize` mode because promoted subgraph widgets
 can confuse that mode string with the numeric seed value.
 
-When a selected preset defines `addenda`, the Selector creates an **Add:**
-toggle for each one. Enabled positive addenda follow the preset text with
+When a category defines `addenda_slots`, the Selector creates one stable
+**Add:** toggle for each slot. Presets fill those slots with their own optional
+text and defaults. Enabled positive addenda follow the preset text with
 natural single-space separation before alias replacement and bundle composition.
 Their negative prompts and tags join the
-corresponding selector outputs. Toggle state is stored in the workflow;
-renamed or unavailable addenda are ignored safely. A Random preset exposes the
-addenda belonging to its currently resolved choice.
+corresponding selector outputs. Toggle state is stored in the workflow, and a
+Random preset uses the same category controls for its resolved choice.
 
 ### Template Composer
 
@@ -486,6 +486,11 @@ categories:
   characters:
     label: "Characters"
     template_slot: "character"
+    addenda_slots:
+      body_details:
+        label: "Body Details"
+      identity_guardrails:
+        label: "Stronger Identity Guardrails"
     metadata:
       tags: ["subject"]
     subcategories:
@@ -500,8 +505,7 @@ categories:
             negative_prompt: |-
               distorted face, inconsistent identity
             addenda:
-              stronger_identity:
-                label: "Stronger Identity Guardrails"
+              identity_guardrails:
                 negative_prompt: |-
                   duplicate person, altered identity
                 default_enabled: true
@@ -514,6 +518,12 @@ categories:
 Keys are saved in workflows and should remain stable. Labels are presentation
 text and may be renamed safely. YAML block scalars such as `|-` and `>-` work
 well for long prompt text.
+
+`addenda_slots` declares the category's stable checkbox interface, with a
+maximum of eight controls. Every preset in that category displays the same
+controls in the same order. A preset's `addenda` mapping supplies text,
+negative text, tags, and its default state for the corresponding slot key.
+The Workbench creates and maintains these mappings without raw YAML editing.
 
 ## Refresh and reload behavior
 

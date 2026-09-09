@@ -79,6 +79,11 @@ categories:
   characters:
     label: Characters
     template_slot: character
+    addenda_slots:
+      freckles:
+        label: Freckles
+      identity_guardrails:
+        label: Identity Guardrails
     metadata:
       tags: [subject]
     subcategories:

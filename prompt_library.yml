@@ -197,6 +197,17 @@ categories:
   characters:
     label: "Characters"
     template_slot: "character"
+    addenda_slots:
+      accessories:
+        label: "Accessories"
+      alternate_hair:
+        label: "Alternate Hair"
+      body_details:
+        label: "Body Details"
+      exposed_anatomy:
+        label: "Exposed Anatomy"
+      identity_guardrails:
+        label: "Stronger Identity Guardrails"
     subcategories:
       actors:
         label: "Actors"
@@ -457,6 +468,15 @@ categories:
   outfits:
     label: "Outfits"
     template_slot: "outfit"
+    addenda_slots:
+      accessories:
+        label: "Accessories"
+      condition:
+        label: "Condition / Weathering"
+      footwear:
+        label: "Alternate Footwear"
+      light_outer_layer:
+        label: "Light Outer Layer"
     subcategories:
       casual:
         label: "Casual"
