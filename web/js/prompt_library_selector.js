@@ -285,10 +285,81 @@ function promotedWidgetBindings(subgraphNode) {
     return bindingsByNode;
 }
 
+function removeDynamicWidgets(node, widgets) {
+    for (const widget of widgets ?? []) {
+        const index = node.widgets?.indexOf(widget) ?? -1;
+        if (index >= 0) node.widgets.splice(index, 1);
+        widget.onRemove?.();
+    }
+}
+
+function syncPromotedAddendaControls(
+    subgraphNode, selector, bindings, selectedPreset, categoryKey, subcategoryKey,
+) {
+    subgraphNode._promptLibraryAddendaMirrors ??= new Map();
+    const mirrorKey = String(selector.id);
+    const previous = subgraphNode._promptLibraryAddendaMirrors.get(mirrorKey);
+    const stateBinding = bindings.get("enabled_addenda");
+    if (!stateBinding?.hostWidget || !selectedPreset) {
+        if (previous) removeDynamicWidgets(subgraphNode, previous.widgets);
+        subgraphNode._promptLibraryAddendaMirrors.delete(mirrorKey);
+        return Boolean(previous);
+    }
+
+    const stateWidget = stateBinding.hostWidget;
+    stateWidget._promptLibraryOriginalComputeSize ??= stateWidget.computeSize;
+    stateWidget.computeSize = () => [0, -4];
+    stateWidget.hidden = true;
+    const state = resolvedAddenda(
+        selectedPreset, categoryKey, subcategoryKey, stateWidget.value,
+    );
+    const addenda = selectedPreset.addenda ?? [];
+    const signature = JSON.stringify([
+        state.identity,
+        ...addenda.map((item) => [item.key, item.label]),
+    ]);
+    const enabledKeys = previous?.signature === signature
+        ? previous.enabledKeys
+        : new Set(state.enabled);
+    enabledKeys.clear();
+    for (const key of state.enabled) enabledKeys.add(key);
+    stateWidget.value = JSON.stringify({preset: state.identity, enabled: [...enabledKeys]});
+    if (previous?.signature === signature) {
+        for (let index = 0; index < addenda.length; index += 1) {
+            previous.widgets[index].value = enabledKeys.has(addenda[index].key);
+        }
+        return false;
+    }
+
+    if (previous) removeDynamicWidgets(subgraphNode, previous.widgets);
+    const widgets = addenda.map((addendum) => subgraphNode.addWidget(
+        "toggle",
+        `Add: ${selectedPreset.label} — ${addendum.label}`,
+        enabledKeys.has(addendum.key),
+        (value) => {
+            if (value) enabledKeys.add(addendum.key);
+            else enabledKeys.delete(addendum.key);
+            stateWidget.value = JSON.stringify({
+                preset: state.identity,
+                enabled: [...enabledKeys],
+            });
+            refreshComposerPreviews();
+            subgraphNode.setDirtyCanvas?.(true, true);
+        },
+        {serialize: false},
+    ));
+    subgraphNode._promptLibraryAddendaMirrors.set(
+        mirrorKey, {signature, widgets, enabledKeys},
+    );
+    return true;
+}
+
 function syncPromotedSelectorWidgets(subgraphNode) {
     let updated = false;
+    const activeMirrorKeys = new Set();
     for (const [selector, bindings] of promotedWidgetBindings(subgraphNode)) {
         if (selector.comfyClass !== NODE_TYPE || !selector._promptLibraryCatalog) continue;
+        activeMirrorKeys.add(String(selector.id));
         const resolvedWidget = (name) => bindings.get(name)?.hostWidget
             ?? selector.widgets?.find((widget) => widget.name === name);
         const category = resolvedWidget("category");
@@ -314,12 +385,32 @@ function syncPromotedSelectorWidgets(subgraphNode) {
             (item) => item.key === subcategory?.value,
         );
         retainOrNone(preset, selectedSubcategory?.presets ?? [], true);
+        const variable = String(resolvedWidget("template_variable")?.value ?? "").trim();
+        const candidates = selectedSubcategory?.presets ?? [];
+        const selectedPreset = preset?.value === RANDOM_KEY
+            ? candidates[stableChoice(
+                seed?.value ?? 0,
+                [variable, category?.value, subcategory?.value],
+                candidates.length,
+            )]
+            : candidates.find((item) => item.key === preset?.value);
+        const addendaUpdated = syncPromotedAddendaControls(
+            subgraphNode, selector, bindings, selectedPreset,
+            category?.value, subcategory?.value,
+        );
+        updated ||= addendaUpdated;
         const after = JSON.stringify([
             category?.value, category?.options?.values,
             subcategory?.value, subcategory?.options?.values,
             preset?.value, preset?.options?.values,
         ]);
         updated ||= before !== after;
+    }
+    for (const [mirrorKey, mirror] of subgraphNode._promptLibraryAddendaMirrors ?? []) {
+        if (activeMirrorKeys.has(mirrorKey)) continue;
+        removeDynamicWidgets(subgraphNode, mirror.widgets);
+        subgraphNode._promptLibraryAddendaMirrors.delete(mirrorKey);
+        updated = true;
     }
     if (updated) subgraphNode.setDirtyCanvas?.(true, true);
 }
@@ -360,9 +451,13 @@ app.registerExtension({
         const enabledAddenda = node.widgets?.find(
             (widget) => widget.name === "enabled_addenda",
         );
+        let addendaStateVisible = false;
+        const originalAddendaStateSize = enabledAddenda?.computeSize?.bind(enabledAddenda);
         if (enabledAddenda) {
-            enabledAddenda.computeSize = () => [0, -4];
-            enabledAddenda.hidden = true;
+            enabledAddenda.label = "Optional addenda state (promote this)";
+            enabledAddenda.computeSize = () => addendaStateVisible
+                ? (originalAddendaStateSize?.() ?? [node.size?.[0] ?? 240, 20])
+                : [0, -4];
         }
         let addendaWidgets = [];
 
@@ -474,6 +569,19 @@ app.registerExtension({
             widget.callback = name === "seed"
                 ? () => { updateAddenda(); refreshComposerPreviews(); }
                 : refreshComposerPreviews;
+        }
+
+        if (enabledAddenda) {
+            const promotionButton = node.addWidget(
+                "button", "Show addenda state for subgraph promotion", null, () => {
+                    addendaStateVisible = !addendaStateVisible;
+                    promotionButton.label = addendaStateVisible
+                        ? "Hide addenda state"
+                        : "Show addenda state for subgraph promotion";
+                    node.setSize?.(node.computeSize?.() ?? node.size);
+                    node.setDirtyCanvas(true, true);
+                },
+            );
         }
 
         node.addWidget("button", "Load selected into overrides", null, () => {

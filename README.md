@@ -311,6 +311,25 @@ chain pass through unchanged, so disabling a middle Selector does not break the
 rest of the chain. This is safer than ComfyUI's native node bypass for a node
 with several differently typed outputs.
 
+### Optional addenda on a subgraph
+
+Optional-addendum switches can also live on the outside of a subgraph. ComfyUI
+requires one real promoted widget to carry that state across the subgraph
+boundary, while the extension turns it into friendly checkboxes:
+
+1. Open the subgraph and click **Show addenda state for subgraph promotion** on
+   the Selector.
+2. Promote **Optional addenda state (promote this)** to the parent, using the
+   same ComfyUI promotion command used for the category, subcategory, and preset.
+3. Return to the parent graph. The packed state field is hidden and replaced by
+   the selected preset's **Add:** switches on the subgraph node.
+
+The switches change automatically when the promoted preset changes, and their
+values are saved separately for each subgraph instance. For nested subgraphs,
+promote the state once through each boundary where you want the switches to be
+available. If the state widget is not promoted, the Selector still uses and
+saves its addenda normally inside the subgraph.
+
 ## Filenames and prompt packets
 
 **Prompt Library Filename Builder** turns a resolved-name chain into a portable
