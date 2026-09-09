@@ -195,7 +195,7 @@ function selectedLibraryEntry(node, overrides) {
     const rawPositive = [
         promptOverride || libraryPositive,
         ...chosenAddenda.map((item) => item.prompt),
-    ].map((value) => String(value ?? "").trim()).filter(Boolean).join("\n\n");
+    ].map((value) => String(value ?? "").trim()).filter(Boolean).join(" ");
     const rawNegative = [...new Map([
         negativeOverride || libraryNegative,
         ...chosenAddenda.map((item) => item.negative_prompt),

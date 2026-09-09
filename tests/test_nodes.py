@@ -157,7 +157,7 @@ class NodeIntegrationTests(unittest.TestCase):
         selected, negative, tags, bundle = response["result"][:4]
         self.assertEqual(
             selected,
-            "Character A is Alpha.\n\nCharacter A has freckles.",
+            "Character A is Alpha. Character A has freckles.",
         )
         self.assertEqual(negative, "duplicate face")
         self.assertEqual(tags, "subject, alpha, freckles")

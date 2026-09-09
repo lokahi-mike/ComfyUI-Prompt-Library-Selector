@@ -62,8 +62,9 @@ ComfyUI's after-generation `randomize` mode because promoted subgraph widgets
 can confuse that mode string with the numeric seed value.
 
 When a selected preset defines `addenda`, the Selector creates an **Add:**
-toggle for each one. Enabled addenda are appended to that preset before alias
-replacement and bundle composition. Their negative prompts and tags join the
+toggle for each one. Enabled positive addenda follow the preset text with
+natural single-space separation before alias replacement and bundle composition.
+Their negative prompts and tags join the
 corresponding selector outputs. Toggle state is stored in the workflow;
 renamed or unavailable addenda are ignored safely. A Random preset exposes the
 addenda belonging to its currently resolved choice.

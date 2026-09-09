@@ -275,7 +275,7 @@ class PromptLibrarySelector:
                 base_prompt,
                 *(item["prompt"].strip() for item in chosen_addenda),
             ),
-            "\n\n",
+            " ",
         )
         raw_negative = ", ".join(deduplicate(
             (
