@@ -35,6 +35,7 @@ Every reusable snippet is a preset item with:
 - optional negative_prompt
 - optional template_slot override
 - optional tags array
+- optional addenda object containing toggleable prompt fragments
 
 Every complete prompt framework is a template item with:
 - type: "template"
@@ -67,6 +68,13 @@ its destination category/subcategory, every template placeholder has a slots
 entry, aliases are used only when subject substitution is needed, and all
 newlines inside JSON strings are escaped correctly.
 ```
+
+Addenda are optional extensions to a preset. Each addendum has a stable key,
+friendly label, and any combination of `prompt`, `negative_prompt`, and
+`tags`. Set `default_enabled` to `true` only when the fragment should be active
+until the user explicitly disables it. Keep the base preset complete and use
+addenda for genuinely optional detail rather than splitting it into dozens of
+tiny required fragments.
 
 You can add model-specific preferences after that instruction. For example,
 you might ask for concise natural-language prose, tag-oriented prompting, or a
@@ -116,7 +124,19 @@ large mixed packet.
       "label": "Rainy Neon",
       "prompt": "Soft cyan and magenta neon mixes with warm storefront light, creating restrained colored highlights and long reflections across rain-damp surfaces.",
       "negative_prompt": "flat lighting, clipped highlights",
-      "tags": ["night", "neon", "rain"]
+      "tags": ["night", "neon", "rain"],
+      "addenda": {
+        "stronger_reflections": {
+          "label": "Stronger Reflections",
+          "prompt": "Elongated colored reflections remain especially visible across the wet pavement.",
+          "tags": ["reflections"]
+        },
+        "highlight_guardrails": {
+          "label": "Highlight Guardrails",
+          "negative_prompt": "blown neon highlights",
+          "default_enabled": true
+        }
+      }
     }
   ]
 }

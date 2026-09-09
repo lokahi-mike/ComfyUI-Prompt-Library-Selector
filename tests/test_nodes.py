@@ -89,6 +89,16 @@ categories:
             label: Alpha
             prompt: '{{subject}} is Alpha.'
             negative_prompt: duplicate face
+            addenda:
+              freckles:
+                label: Freckles
+                prompt: '{{subject}} has freckles.'
+                metadata:
+                  tags: [freckles]
+              identity_guardrails:
+                label: Identity Guardrails
+                negative_prompt: duplicate person
+                default_enabled: true
             metadata:
               tags: [alpha]
           beta:
@@ -126,7 +136,7 @@ class NodeIntegrationTests(unittest.TestCase):
         result = response["result"]
         self.assertEqual(len(result), 5)
         self.assertEqual(result[0], "Character A is Alpha.")
-        self.assertEqual(result[1], "duplicate face")
+        self.assertEqual(result[1], "duplicate face, duplicate person")
         self.assertEqual(result[2], "subject, alpha")
         self.assertEqual(result[3]["segments"][0]["variable"], "character_a")
         self.assertEqual(result[4], "Alpha")
@@ -139,6 +149,49 @@ class NodeIntegrationTests(unittest.TestCase):
         self.assertEqual(seed_options["default"], 0)
         self.assertNotIn("control_after_generate", seed_options)
 
+    def test_selector_applies_enabled_addenda_to_all_outputs(self):
+        response = self.nodes.PromptLibrarySelector().select_prompt(
+            "characters", "people", "alpha", alias="Character A",
+            enabled_addenda='{"preset":"characters/people/alpha","enabled":["freckles"]}',
+        )
+        selected, negative, tags, bundle = response["result"][:4]
+        self.assertEqual(
+            selected,
+            "Character A is Alpha.\n\nCharacter A has freckles.",
+        )
+        self.assertEqual(negative, "duplicate face")
+        self.assertEqual(tags, "subject, alpha, freckles")
+        self.assertEqual(bundle["segments"][0]["addenda"], ["freckles"])
+
+    def test_selector_uses_default_addenda_until_state_is_explicit(self):
+        selector = self.nodes.PromptLibrarySelector()
+        default_result = selector.select_prompt(
+            "characters", "people", "alpha"
+        )["result"]
+        disabled_result = selector.select_prompt(
+            "characters", "people", "alpha",
+            enabled_addenda='{"preset":"characters/people/alpha","enabled":[]}',
+        )["result"]
+        self.assertEqual(default_result[1], "duplicate face, duplicate person")
+        self.assertEqual(disabled_result[1], "duplicate face")
+
+    def test_selector_ignores_addenda_state_for_another_preset(self):
+        result = self.nodes.PromptLibrarySelector().select_prompt(
+            "characters", "people", "beta",
+            enabled_addenda='{"preset":"characters/people/alpha","enabled":["freckles"]}',
+        )["result"]
+        self.assertEqual(result[0], "{{subject}} is Beta.")
+        self.assertEqual(result[1], "")
+        self.assertEqual(result[2], "subject, beta")
+
+    def test_stale_addenda_state_falls_back_to_current_preset_defaults(self):
+        result = self.nodes.PromptLibrarySelector().select_prompt(
+            "characters", "people", "alpha",
+            enabled_addenda='{"preset":"characters/people/removed","enabled":["freckles"]}',
+        )["result"]
+        self.assertEqual(result[0], "{{subject}} is Alpha.")
+        self.assertEqual(result[1], "duplicate face, duplicate person")
+
     def test_template_composer_assigns_repeated_sources_and_template_aliases(self):
         selector = self.nodes.PromptLibrarySelector()
         first = selector.select_prompt("characters", "people", "alpha")["result"][3]
@@ -150,7 +203,7 @@ class NodeIntegrationTests(unittest.TestCase):
         )
         positive, negative = response["result"]
         self.assertEqual(positive, "Character A is Alpha.\n\nCharacter B is Beta.")
-        self.assertEqual(negative, "duplicate face")
+        self.assertEqual(negative, "duplicate face, duplicate person")
 
     def test_resolved_names_chain_with_custom_separator_and_skip_none(self):
         selector = self.nodes.PromptLibrarySelector()

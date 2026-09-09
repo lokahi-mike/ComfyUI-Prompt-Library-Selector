@@ -173,6 +173,7 @@ class PromptLibrary:
                         "negative_prompt": str(preset.get("negative_prompt", "") or ""),
                         "template_slot": str(preset.get("template_slot", "") or ""),
                         "tags": deduplicate((*category_tags, *subcategory_tags, *self._tags(preset))),
+                        "addenda": self._addenda(preset),
                     })
                 subcategories.append({"key": str(subcategory_key), "label": self._label(subcategory_key, subcategory), "tags": subcategory_tags, "presets": presets})
             categories.append({
@@ -232,6 +233,7 @@ class PromptLibrary:
             "negative_prompt": str(entry.get("negative_prompt", "") or ""),
             "template_slot": str(entry.get("template_slot") or category_data.get("template_slot") or category),
             "tags": deduplicate((*self._tags(category_data), *self._tags(subcategory_data), *self._tags(entry))),
+            "addenda": self._addenda(entry),
         }
 
     def resolve(self, category: str, subcategory: str, preset: str) -> str:
@@ -279,7 +281,7 @@ class PromptLibrary:
 
     @staticmethod
     def _empty_entry() -> dict[str, Any]:
-        return {"key": NONE_KEY, "label": "None", "prompt": "", "negative_prompt": "", "template_slot": "", "tags": []}
+        return {"key": NONE_KEY, "label": "None", "prompt": "", "negative_prompt": "", "template_slot": "", "tags": [], "addenda": []}
 
     @staticmethod
     def _mapping(value: Any, context: str) -> dict[str, Any]:
@@ -296,6 +298,24 @@ class PromptLibrary:
         metadata = value.get("metadata", {}) or {}
         tags = metadata.get("tags", []) if isinstance(metadata, dict) else []
         return [tags] if isinstance(tags, str) else deduplicate(tags if isinstance(tags, list) else [])
+
+    @classmethod
+    def _addenda(cls, value: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = value.get("addenda", {}) or {}
+        if not isinstance(raw, dict):
+            return []
+        result = []
+        for key, raw_addendum in cls._sorted_items(raw):
+            addendum = cls._entry_mapping(raw_addendum)
+            result.append({
+                "key": str(key),
+                "label": cls._label(key, addendum),
+                "prompt": str(addendum.get("prompt", "") or ""),
+                "negative_prompt": str(addendum.get("negative_prompt", "") or ""),
+                "default_enabled": bool(addendum.get("default_enabled", False)),
+                "tags": cls._tags(addendum),
+            })
+        return result
 
     @staticmethod
     def _label(key: Any, value: dict[str, Any]) -> str:

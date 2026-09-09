@@ -19,6 +19,8 @@ from .prompt_library import (
     append_bundle,
     apply_alias,
     assemble_template,
+    compose_fragments,
+    deduplicate,
     map_bundle_to_template,
 )
 
@@ -197,6 +199,14 @@ class PromptLibrarySelector:
                         "placeholder": "Empty uses the selected YAML negative prompt",
                     },
                 ),
+                "enabled_addenda": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "dynamicPrompts": False,
+                    },
+                ),
                 "bundle_in": ("PROMPT_BUNDLE", {"forceInput": True}),
                 "resolved_names_in": ("STRING", {"forceInput": True}),
                 "name_separator": (
@@ -231,6 +241,7 @@ class PromptLibrarySelector:
         seed=0,
         prompt_override="",
         negative_override="",
+        enabled_addenda="",
         bundle_in=None,
         resolved_names_in="",
         name_separator=", ",
@@ -238,10 +249,46 @@ class PromptLibrarySelector:
         entry = active_library().resolve_entry(
             category, subcategory, preset, seed, template_variable
         )
-        raw_prompt = str(prompt_override or "").strip() or entry["prompt"]
-        raw_negative = (
-            str(negative_override or "").strip() or entry["negative_prompt"]
+        enabled_keys = None
+        resolved_identity = f"{category}/{subcategory}/{entry['key']}"
+        try:
+            addenda_state = json.loads(str(enabled_addenda or ""))
+            if isinstance(addenda_state, dict):
+                state_identity = str(addenda_state.get("preset", "") or "")
+                if not state_identity or state_identity == resolved_identity:
+                    enabled_keys = {
+                        str(key) for key in addenda_state.get("enabled", [])
+                    }
+            elif isinstance(addenda_state, list):
+                enabled_keys = {str(key) for key in addenda_state}
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+        if enabled_keys is None:
+            enabled_keys = {
+                item["key"] for item in entry["addenda"] if item["default_enabled"]
+            }
+        chosen_addenda = [
+            item for item in entry["addenda"] if item["key"] in enabled_keys
+        ]
+        base_prompt = str(prompt_override or "").strip() or entry["prompt"]
+        base_negative = str(negative_override or "").strip() or entry["negative_prompt"]
+        raw_prompt = compose_fragments(
+            (
+                base_prompt,
+                *(item["prompt"].strip() for item in chosen_addenda),
+            ),
+            "\n\n",
         )
+        raw_negative = ", ".join(deduplicate(
+            (
+                base_negative,
+                *(item["negative_prompt"].strip() for item in chosen_addenda),
+            )
+        ))
+        selected_tags_list = deduplicate((
+            *entry["tags"],
+            *(tag for item in chosen_addenda for tag in item["tags"]),
+        ))
         selected = apply_alias(raw_prompt, alias) if enabled else ""
         selected_negative = raw_negative if enabled else ""
         variable = str(template_variable or "").strip() or entry["template_slot"]
@@ -252,14 +299,15 @@ class PromptLibrarySelector:
             "raw_positive": raw_prompt,
             "positive": selected,
             "negative": raw_negative,
-            "tags": entry["tags"],
+            "tags": selected_tags_list,
+            "addenda": [item["key"] for item in chosen_addenda],
             "category": category,
             "subcategory": subcategory,
             "preset": entry["key"],
             "label": entry["label"],
         }
         bundle = append_bundle(bundle_in, segment if enabled else None)
-        selected_tags = ", ".join(entry["tags"]) if enabled else ""
+        selected_tags = ", ".join(selected_tags_list) if enabled else ""
         previous_names = str(resolved_names_in or "").strip()
         current_name = (
             str(entry["label"] or "").strip()

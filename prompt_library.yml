@@ -350,6 +350,14 @@ categories:
               {{subject}} is an original adult woman, not a celebrity. Keep a coherent adult identity, natural face, and consistent stature until a finished original-character preset replaces this.
             negative_prompt: |-
               teen, child, celebrity likeness, inconsistent identity
+            addenda:
+              identity_guardrails:
+                label: "Stronger Identity Guardrails"
+                negative_prompt: |-
+                  duplicate person, inconsistent face, altered identity
+                default_enabled: true
+                metadata:
+                  tags: ["identity_guardrail"]
             metadata:
               tags: ["placeholder", "original_character"]
   combined_poses:
@@ -457,6 +465,13 @@ categories:
             label: "Simple Day Clothes"
             prompt: |-
               {{subject}} wears ordinary daytime clothes: a well-fitting top, simple trousers or a skirt, and everyday shoes, fabric hanging with real weight.
+            addenda:
+              light_outer_layer:
+                label: "Light Outer Layer"
+                prompt: |-
+                  {{subject}} adds a lightweight casual jacket worn naturally over the base outfit.
+                metadata:
+                  tags: ["layering", "jacket"]
             metadata:
               tags: ["outfit", "casual"]
       formal:

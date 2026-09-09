@@ -178,6 +178,12 @@
     details.metadata { border: 1px solid var(--line); border-radius: 10px; padding: .65rem .75rem; min-width: 0; }
     details.metadata summary { color: var(--muted); cursor: pointer; font-size: .8rem; font-weight: 650; }
     details.metadata[open] summary { margin-bottom: .75rem; }
+    .addenda-editor { display: grid; gap: .7rem; }
+    .addenda-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+    .addendum-card { display: grid; gap: .65rem; padding: .75rem; border: 1px solid var(--line); border-radius: 10px; background: rgba(17, 17, 23, .55); }
+    .addendum-actions { display: flex; align-items: center; justify-content: space-between; gap: .65rem; }
+    .checkbox-field { display: flex; align-items: center; gap: .5rem; }
+    .checkbox-field input { width: auto; }
 
     .status {
       padding: .68rem 1rem;
@@ -566,6 +572,8 @@
             preset.negativePrompt = String(preset.negativePrompt ?? "");
             preset.templateSlot = String(preset.templateSlot ?? "");
             preset.autoKey ??= false;
+            preset.addenda = Array.isArray(preset.addenda) ? preset.addenda : [];
+            for (const addendum of preset.addenda) normalizeAddendum(addendum);
           }
         }
       }
@@ -584,6 +592,18 @@
       return template;
     }
 
+    function normalizeAddendum(addendum) {
+      addendum.id ||= makeId();
+      addendum.label = String(addendum.label ?? addendum.key ?? "Untitled Addendum");
+      addendum.key = String(addendum.key ?? slugify(addendum.label));
+      addendum.prompt = String(addendum.prompt ?? "");
+      addendum.negativePrompt = String(addendum.negativePrompt ?? addendum.negative_prompt ?? "");
+      addendum.tags = Array.isArray(addendum.tags) ? addendum.tags : [];
+      addendum.defaultEnabled = Boolean(addendum.defaultEnabled ?? addendum.default_enabled ?? false);
+      addendum.autoKey ??= false;
+      return addendum;
+    }
+
     function suggestedTemplateSlot(key) {
       return ({
         characters: "character", outfits: "outfit", poses: "pose",
@@ -596,11 +616,11 @@
     function loadPlayground() {
       try {
         const saved = JSON.parse(localStorage.getItem(PLAYGROUND_STORAGE_KEY));
-        if (saved && typeof saved === "object") return { templateId: saved.templateId ?? null, seed: Number(saved.seed) || 1, selections: saved.selections ?? {}, overrides: saved.overrides ?? {} };
+        if (saved && typeof saved === "object") return { templateId: saved.templateId ?? null, seed: Number(saved.seed) || 1, selections: saved.selections ?? {}, overrides: saved.overrides ?? {}, addenda: saved.addenda ?? {} };
       } catch (error) {
         console.warn("Unable to restore playground state", error);
       }
-      return { templateId: null, seed: 1, selections: {}, overrides: {} };
+      return { templateId: null, seed: 1, selections: {}, overrides: {}, addenda: {} };
     }
 
     function savePlayground() {
@@ -906,7 +926,11 @@
     }
 
     function newPreset(label = "New Preset") {
-      return { id: makeId(), key: slugify(label), label, tags: [], prompt: "", negativePrompt: "", templateSlot: "", autoKey: true };
+      return { id: makeId(), key: slugify(label), label, tags: [], prompt: "", negativePrompt: "", templateSlot: "", addenda: [], autoKey: true };
+    }
+
+    function newAddendum(label = "New Addendum") {
+      return { id: makeId(), key: slugify(label), label, prompt: "", negativePrompt: "", tags: [], defaultEnabled: false, autoKey: true };
     }
 
     function newTemplateCategory(label = "New Template Category") {
@@ -1040,6 +1064,7 @@
         const guidance = document.createElement("div"); guidance.id = "presetGuidance"; form.append(guidance);
         form.append(field("Negative prompt", "negativePrompt", found.item.negativePrompt, "Stored and composed separately for models and workflows that support negative conditioning.", true));
         form.append(field("Template slot override", "templateSlot", found.item.templateSlot, "Optional {{variable}} name for this preset; otherwise the category default is used."));
+        form.append(addendaEditor(found.item));
         queueMicrotask(updatePresetGuidance);
       }
 
@@ -1086,6 +1111,91 @@
         label.append(help);
       }
       return label;
+    }
+
+    function addendumField(addendum, labelText, property, multiline = false) {
+      const label = document.createElement("label");
+      label.textContent = labelText;
+      const input = document.createElement(multiline ? "textarea" : "input");
+      input.value = property === "tags" ? addendum.tags.join(", ") : (addendum[property] ?? "");
+      if (multiline) input.rows = 4;
+      input.addEventListener("input", () => {
+        if (property === "tags") addendum.tags = splitTags(input.value);
+        else if (property === "label") {
+          addendum.label = input.value;
+          if (addendum.autoKey) {
+            addendum.key = slugify(input.value);
+            const keyInput = input.closest(".addendum-card")?.querySelector('[data-addendum-key]');
+            if (keyInput) keyInput.value = addendum.key;
+          }
+        } else {
+          addendum[property] = input.value;
+          if (property === "key") addendum.autoKey = false;
+        }
+        renderWithoutEditor();
+      });
+      if (property === "key") input.dataset.addendumKey = "true";
+      label.append(input);
+      return label;
+    }
+
+    function addendaEditor(preset) {
+      const details = document.createElement("details");
+      details.className = "metadata addenda-editor";
+      details.open = Boolean(preset.addenda.length);
+      const summary = document.createElement("summary");
+      summary.textContent = `Optional addenda (${preset.addenda.length})`;
+      details.append(summary);
+      const head = document.createElement("div");
+      head.className = "addenda-head";
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = "Toggleable prompt fragments offered by this preset.";
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "compact";
+      add.textContent = "+ Addendum";
+      add.addEventListener("click", () => {
+        preset.addenda.push(newAddendum());
+        render();
+      });
+      head.append(hint, add);
+      details.append(head);
+      for (const addendum of preset.addenda) {
+        const card = document.createElement("div");
+        card.className = "addendum-card";
+        card.append(
+          addendumField(addendum, "Friendly label", "label"),
+          addendumField(addendum, "Stable key", "key"),
+          addendumField(addendum, "Positive prompt", "prompt", true),
+          addendumField(addendum, "Negative prompt", "negativePrompt", true),
+          addendumField(addendum, "Metadata tags", "tags"),
+        );
+        const actions = document.createElement("div");
+        actions.className = "addendum-actions";
+        const defaultLabel = document.createElement("label");
+        defaultLabel.className = "checkbox-field";
+        const defaultToggle = document.createElement("input");
+        defaultToggle.type = "checkbox";
+        defaultToggle.checked = addendum.defaultEnabled;
+        defaultToggle.addEventListener("change", () => {
+          addendum.defaultEnabled = defaultToggle.checked;
+          renderWithoutEditor();
+        });
+        defaultLabel.append(defaultToggle, document.createTextNode("Enabled by default"));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "compact danger";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => {
+          preset.addenda = preset.addenda.filter((item) => item.id !== addendum.id);
+          render();
+        });
+        actions.append(defaultLabel, remove);
+        card.append(actions);
+        details.append(card);
+      }
+      return details;
     }
 
     function presetPromptGuidance(found) {
@@ -1661,13 +1771,41 @@
         positive.addEventListener("input", () => { override.positive = positive.value; updatePlaygroundOutput(); });
         negative.addEventListener("input", () => { override.negative = negative.value; updatePlaygroundOutput(); });
         editActions.append(loadSelected, resetEdit); details.append(editActions, positive, negative);
+        const addendaKey = entry ? `${variable}:${entry.preset.id}` : "";
+        if (entry && !Array.isArray(playground.addenda[addendaKey])) {
+          playground.addenda[addendaKey] = entry.preset.addenda.filter((item) => item.defaultEnabled).map((item) => item.key);
+        }
+        const enabledAddenda = new Set(addendaKey ? playground.addenda[addendaKey] : []);
+        let addendaBox = null;
+        if (entry?.preset.addenda.length) {
+          addendaBox = document.createElement("details");
+          addendaBox.className = "metadata";
+          addendaBox.innerHTML = "<summary>Optional addenda</summary>";
+          for (const addendum of entry.preset.addenda) {
+            const label = document.createElement("label");
+            label.className = "checkbox-field";
+            const toggle = document.createElement("input");
+            toggle.type = "checkbox";
+            toggle.checked = enabledAddenda.has(addendum.key);
+            toggle.addEventListener("change", () => {
+              if (toggle.checked) enabledAddenda.add(addendum.key);
+              else enabledAddenda.delete(addendum.key);
+              playground.addenda[addendaKey] = [...enabledAddenda];
+              updatePlaygroundOutput();
+            });
+            label.append(toggle, document.createTextNode(addendum.label));
+            addendaBox.append(label);
+          }
+        }
         select.addEventListener("change", () => { playground.selections[variable] = select.value; savePlayground(); renderPlayground(); });
-        box.append(head, select, details); slots.append(box);
-        const prompt = override.positive.trim() || entry?.preset.prompt || defaultValue;
+        box.append(head, select);
+        if (addendaBox) box.append(addendaBox);
+        box.append(details); slots.append(box);
+        const chosenAddenda = (entry?.preset.addenda ?? []).filter((item) => enabledAddenda.has(item.key));
+        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join("\n\n");
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
-        const negativePrompt = override.negative.trim() || entry?.preset.negativePrompt || "";
-        if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
-        for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? [])]) tags.add(tag);
+        for (const negativePrompt of [override.negative.trim() || entry?.preset.negativePrompt || "", ...chosenAddenda.map((item) => item.negativePrompt)]) if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
+        for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? []), ...chosenAddenda.flatMap((item) => item.tags)]) tags.add(tag);
         if (!entry && !override.positive.trim() && !defaultValue.trim()) missing.push(variable);
       }
       let assembled = template.text;
@@ -1696,11 +1834,16 @@
         if (selected === RANDOM_KEY) entry = candidates[hashChoice(playground.seed, variable, candidates.length)];
         const override = playground.overrides[variable] ?? { positive: "", negative: "" };
         const defaultValue = template.defaults?.[variable] ?? "";
-        const prompt = override.positive.trim() || entry?.preset.prompt || defaultValue;
+        const addendaKey = entry ? `${variable}:${entry.preset.id}` : "";
+        if (entry && !Array.isArray(playground.addenda[addendaKey])) {
+          playground.addenda[addendaKey] = entry.preset.addenda.filter((item) => item.defaultEnabled).map((item) => item.key);
+        }
+        const enabledAddenda = new Set(addendaKey ? playground.addenda[addendaKey] : []);
+        const chosenAddenda = (entry?.preset.addenda ?? []).filter((item) => enabledAddenda.has(item.key));
+        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join("\n\n");
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
-        const negativePrompt = override.negative.trim() || entry?.preset.negativePrompt || "";
-        if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
-        for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? [])]) tags.add(tag);
+        for (const negativePrompt of [override.negative.trim() || entry?.preset.negativePrompt || "", ...chosenAddenda.map((item) => item.negativePrompt)]) if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
+        for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? []), ...chosenAddenda.flatMap((item) => item.tags)]) tags.add(tag);
         if (!entry && !override.positive.trim() && !defaultValue.trim()) missing.push(variable);
       }
       let assembled = template.text;
@@ -1722,7 +1865,14 @@
           subcategory: { key: "neon", label: "Neon" },
           key: "rainy_neon", label: "Rainy Neon",
           prompt: "Soft cyan and magenta neon reflects across rain-damp surfaces.",
-          negative_prompt: "flat lighting", tags: ["night", "neon"]
+          negative_prompt: "flat lighting", tags: ["night", "neon"],
+          addenda: {
+            stronger_reflections: {
+              label: "Stronger Reflections",
+              prompt: "Elongated colored reflections remain visible across the wet pavement.",
+              tags: ["reflections"]
+            }
+          }
         },
         {
           type: "template",
@@ -1745,6 +1895,24 @@
         templateSlot: String(source.template_slot || source.templateSlot || "").trim(),
         tags: Array.isArray(source.tags) ? source.tags.map(String) : splitTags(source.tags),
       };
+    }
+
+    function importAddenda(value) {
+      const entries = Array.isArray(value)
+        ? value.map((item) => [item?.key || item?.stable_key || slugify(item?.label || "addendum"), item])
+        : Object.entries(value && typeof value === "object" ? value : {});
+      return entries.map(([key, raw]) => {
+        const source = raw && typeof raw === "object" ? raw : {prompt: raw};
+        return {
+          id: makeId(), key: String(key),
+          label: String(source.label || String(key).replaceAll("_", " ")),
+          prompt: String(source.prompt || ""),
+          negativePrompt: String(source.negative_prompt || source.negativePrompt || ""),
+          tags: Array.isArray(source.tags) ? source.tags.map(String) : splitTags(source.tags),
+          defaultEnabled: Boolean(source.default_enabled ?? source.defaultEnabled),
+          autoKey: false,
+        };
+      });
     }
 
     function parseImportPacket(source) {
@@ -1777,6 +1945,7 @@
           negativePrompt: String(raw.negative_prompt ?? raw.negativePrompt ?? raw.negative ?? ""),
           templateSlot: String(raw.template_slot ?? raw.templateSlot ?? "").trim(),
           tags: Array.isArray(raw.tags) ? raw.tags.map(String) : splitTags(raw.tags),
+          addenda: importAddenda(raw.addenda),
         };
       });
     }
@@ -1840,7 +2009,7 @@
           templateSelection = { type: "template", id: template.id };
         } else {
           const preset = newPreset(item.label);
-          Object.assign(preset, { key: item.key, autoKey: false, prompt: item.prompt, negativePrompt: item.negativePrompt, templateSlot: item.templateSlot, tags: item.tags });
+          Object.assign(preset, { key: item.key, autoKey: false, prompt: item.prompt, negativePrompt: item.negativePrompt, templateSlot: item.templateSlot, tags: item.tags, addenda: item.addenda });
           subcategory.presets.push(preset);
           selection = { type: "preset", id: preset.id };
         }
@@ -1946,7 +2115,13 @@
         checkGroup(category.subcategories, category.key || "category");
         for (const subcategory of category.subcategories) {
           checkGroup(subcategory.presets, subcategory.key || "subcategory");
-          for (const preset of subcategory.presets) if (preset.templateSlot && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(preset.templateSlot)) errors.push(`Template slot “${preset.templateSlot}” is invalid`);
+          for (const preset of subcategory.presets) {
+            if (preset.templateSlot && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(preset.templateSlot)) errors.push(`Template slot “${preset.templateSlot}” is invalid`);
+            checkGroup(preset.addenda, `${category.key}/${subcategory.key}/${preset.key} addenda`);
+            for (const addendum of preset.addenda) {
+              if (!addendum.prompt.trim() && !addendum.negativePrompt.trim() && !addendum.tags.length) errors.push(`Addendum “${addendum.key}” is empty`);
+            }
+          }
         }
       }
       return [...new Set(errors)];
@@ -1973,7 +2148,15 @@
           key: category.key, label: category.label, templateSlot: category.templateSlot, tags: category.tags,
           subcategories: category.subcategories.map((subcategory) => ({
             key: subcategory.key, label: subcategory.label, tags: subcategory.tags,
-            presets: subcategory.presets.map((preset) => ({ key: preset.key, label: preset.label, prompt: preset.prompt, negativePrompt: preset.negativePrompt, templateSlot: preset.templateSlot, tags: preset.tags })),
+            presets: subcategory.presets.map((preset) => ({
+              key: preset.key, label: preset.label, prompt: preset.prompt,
+              negativePrompt: preset.negativePrompt, templateSlot: preset.templateSlot, tags: preset.tags,
+              addenda: preset.addenda.map((addendum) => ({
+                key: addendum.key, label: addendum.label, prompt: addendum.prompt,
+                negativePrompt: addendum.negativePrompt, tags: addendum.tags,
+                defaultEnabled: addendum.defaultEnabled,
+              })),
+            })),
           })),
         })),
       });
@@ -2041,6 +2224,16 @@
             if (preset.negativePrompt.trim()) lines.push("            negative_prompt: |-", indentPrompt(preset.negativePrompt, 14));
             if (preset.templateSlot.trim()) lines.push(`            template_slot: ${quote(preset.templateSlot.trim())}`);
             if (preset.tags.length) lines.push("            metadata:", `              tags: ${tagYaml(preset.tags)}`);
+            if (preset.addenda.length) {
+              lines.push("            addenda:");
+              for (const addendum of preset.addenda) {
+                lines.push(`              ${keyLine(addendum.key)}:`, `                label: ${quote(addendum.label)}`);
+                if (addendum.prompt.trim()) lines.push("                prompt: |-", indentPrompt(addendum.prompt, 18));
+                if (addendum.negativePrompt.trim()) lines.push("                negative_prompt: |-", indentPrompt(addendum.negativePrompt, 18));
+                if (addendum.defaultEnabled) lines.push("                default_enabled: true");
+                if (addendum.tags.length) lines.push("                metadata:", `                  tags: ${tagYaml(addendum.tags)}`);
+              }
+            }
           }
         }
       }
@@ -2059,6 +2252,8 @@
       let category = null;
       let subcategory = null;
       let preset = null;
+      let addendum = null;
+      let addendaSection = false;
       let blockTarget = null;
       let blockProperty = null;
       let blockIndent = null;
@@ -2085,6 +2280,10 @@
           finishBlock();
         }
         if (!text || text.startsWith("#") || text.startsWith("version:")) continue;
+        if (section === "categories" && indent <= 12 && text !== "addenda:") {
+          addendaSection = false;
+          addendum = null;
+        }
         if (indent === 0 && text === "templates:") { section = "templates"; template = templateCategory = templateSubcategory = null; flatTemplate = false; templateMapSection = null; category = subcategory = preset = null; continue; }
         if (indent === 0 && text === "categories:") { section = "categories"; category = subcategory = preset = null; continue; }
 
@@ -2141,6 +2340,38 @@
           preset.key = keyMatch[1];
           preset.autoKey = false;
           subcategory.presets.push(preset);
+          continue;
+        }
+        if (section === "categories" && indent === 12 && text === "addenda:" && preset) {
+          addendaSection = true;
+          addendum = null;
+          continue;
+        }
+        if (section === "categories" && indent === 14 && keyMatch && preset && addendaSection) {
+          addendum = newAddendum(keyMatch[1]);
+          addendum.key = keyMatch[1];
+          addendum.autoKey = false;
+          preset.addenda.push(addendum);
+          continue;
+        }
+        if (section === "categories" && indent === 16 && addendum) {
+          const addendumValue = text.match(/^(label|default_enabled):\s*(.*)$/);
+          if (addendumValue) {
+            if (addendumValue[1] === "label") addendum.label = parseScalar(addendumValue[2]);
+            else addendum.defaultEnabled = /^(true|yes|1)$/i.test(addendumValue[2].trim());
+            continue;
+          }
+          if (/^prompt:\s*[>|]/.test(text)) {
+            blockTarget = addendum; blockProperty = "prompt"; blockIndent = 18; blockLines = [];
+            continue;
+          }
+          if (/^negative_prompt:\s*[>|]/.test(text)) {
+            blockTarget = addendum; blockProperty = "negativePrompt"; blockIndent = 18; blockLines = [];
+            continue;
+          }
+        }
+        if (section === "categories" && indent === 18 && addendum && /^tags:\s*/.test(text)) {
+          addendum.tags = parseTags(text.replace(/^tags:\s*/, ""));
           continue;
         }
 

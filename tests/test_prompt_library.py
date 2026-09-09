@@ -70,6 +70,16 @@ categories:
             label: Rhiannon
             prompt: '{{subject}} is Rhiannon.'
             negative_prompt: distorted face
+            addenda:
+              freckles:
+                label: Freckles
+                prompt: '{{subject}} has freckles.'
+                metadata:
+                  tags: [freckles]
+              identity_guardrails:
+                label: Identity Guardrails
+                negative_prompt: duplicate person
+                default_enabled: true
             metadata:
               tags: [adult, original]
           zara:
@@ -159,6 +169,11 @@ class PromptLibraryTests(unittest.TestCase):
         self.assertEqual(preset["negative_prompt"], "distorted face")
         self.assertEqual(preset["template_slot"], "")
         self.assertEqual(preset["tags"], ["subject", "adult", "original"])
+        self.assertEqual(
+            [item["key"] for item in preset["addenda"]],
+            ["freckles", "identity_guardrails"],
+        )
+        self.assertTrue(preset["addenda"][1]["default_enabled"])
 
     def test_flat_v2_templates_are_exposed_under_general_groups(self):
         self.path.write_text(SAMPLE_FLAT_V2, encoding="utf-8")

@@ -47,6 +47,8 @@ of hunting through workflows.
 - Graceful fallback when a saved item is renamed or removed
 - Seeded **Random** selection for repeatable batch experiments
 - Editable positive and negative overrides without changing the YAML
+- Per-preset optional addenda with workflow-saved toggles
+- Addenda can contribute positive text, negative text, and metadata tags
 - Workflow-specific subject aliases such as `Character A` and `Character B`
 - Automatic Prompt Bundle chaining between selector nodes
 - Manual template-variable override when automatic assignment is not desired
@@ -58,6 +60,13 @@ The Random seed is always a non-negative integer. To reroll a Random preset,
 change or increment the seed; the Selector intentionally does not use
 ComfyUI's after-generation `randomize` mode because promoted subgraph widgets
 can confuse that mode string with the numeric seed value.
+
+When a selected preset defines `addenda`, the Selector creates an **Add:**
+toggle for each one. Enabled addenda are appended to that preset before alias
+replacement and bundle composition. Their negative prompts and tags join the
+corresponding selector outputs. Toggle state is stored in the workflow;
+renamed or unavailable addenda are ignored safely. A Random preset exposes the
+addenda belonging to its currently resolved choice.
 
 ### Template Composer
 
@@ -339,6 +348,7 @@ Each preset supports:
 - Optional negative prompt
 - Optional template-slot override
 - Optional metadata tags
+- Optional toggleable addenda, including defaults
 
 New keys follow the label automatically until manually edited. Categories and
 subcategories start collapsed, remember their state, and can be expanded or
@@ -387,6 +397,8 @@ future search/filtering scale more cleanly.
 The Playground assembles a selected template entirely in the browser. Choose a
 preset or Random value for each variable and inspect the final positive prompt,
 negative prompt, and tags before spending generation credits.
+Addenda appear as switches beneath the selected preset, so their combined
+effect can be tested offline too.
 
 Temporary overrides let you experiment without modifying the library. **Load
 selected text** copies a preset into the override editor; **Use library
@@ -473,6 +485,14 @@ categories:
               naturally proportioned build.
             negative_prompt: |-
               distorted face, inconsistent identity
+            addenda:
+              stronger_identity:
+                label: "Stronger Identity Guardrails"
+                negative_prompt: |-
+                  duplicate person, altered identity
+                default_enabled: true
+                metadata:
+                  tags: ["identity_guardrail"]
             metadata:
               tags: ["adult", "original"]
 ```

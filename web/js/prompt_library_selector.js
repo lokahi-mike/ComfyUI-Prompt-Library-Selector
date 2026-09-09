@@ -164,6 +164,32 @@ function normalizeSeedWidget(widget) {
     return true;
 }
 
+function parseAddendaState(value) {
+    try {
+        const parsed = JSON.parse(String(value ?? ""));
+        if (Array.isArray(parsed)) return {preset: "", enabled: parsed.map(String)};
+        if (parsed && typeof parsed === "object") {
+            return {
+                preset: String(parsed.preset ?? ""),
+                enabled: Array.isArray(parsed.enabled) ? parsed.enabled.map(String) : [],
+            };
+        }
+    } catch (_error) {
+        // An empty or stale value means the preset defaults have not been initialized.
+    }
+    return null;
+}
+
+function resolvedAddenda(preset, categoryKey, subcategoryKey, stateValue) {
+    const identity = `${categoryKey}/${subcategoryKey}/${preset?.key ?? NONE_KEY}`;
+    const state = parseAddendaState(stateValue);
+    const available = new Set((preset?.addenda ?? []).map((item) => item.key));
+    const enabled = state && (!state.preset || state.preset === identity)
+        ? state.enabled.filter((key) => available.has(key))
+        : (preset?.addenda ?? []).filter((item) => item.default_enabled).map((item) => item.key);
+    return {identity, enabled, stateMatches: Boolean(state && (!state.preset || state.preset === identity))};
+}
+
 function selectedLibraryEntry(node, overrides) {
     const enabled = widgetValue(node, "enabled", overrides) !== false;
     const categoryKey = widgetValue(node, "category", overrides);
@@ -186,17 +212,37 @@ function selectedLibraryEntry(node, overrides) {
     const alias = String(widgetValue(node, "alias", overrides) ?? "").trim();
     const libraryPositive = preset?.prompt || "";
     const libraryNegative = preset?.negative_prompt || "";
-    const rawPositive = promptOverride || libraryPositive;
+    const addenda = resolvedAddenda(
+        preset, categoryKey, subcategoryKey,
+        widgetValue(node, "enabled_addenda", overrides),
+    );
+    const enabledKeys = new Set(addenda.enabled);
+    const chosenAddenda = (preset?.addenda ?? []).filter((item) => enabledKeys.has(item.key));
+    const rawPositive = [
+        promptOverride || libraryPositive,
+        ...chosenAddenda.map((item) => item.prompt),
+    ].map((value) => String(value ?? "").trim()).filter(Boolean).join("\n\n");
+    const rawNegative = [...new Map([
+        negativeOverride || libraryNegative,
+        ...chosenAddenda.map((item) => item.negative_prompt),
+    ].map((value) => String(value ?? "").trim()).filter(Boolean)
+        .map((value) => [value.toLowerCase(), value])).values()].join(", ");
+    const tags = [...new Map([
+        ...(preset?.tags ?? []),
+        ...chosenAddenda.flatMap((item) => item.tags ?? []),
+    ].map((value) => [String(value).toLowerCase(), String(value)])).values()];
     return {
         variable: variable || preset?.template_slot || category?.template_slot || categoryKey || "",
         source: preset?.template_slot || category?.template_slot || categoryKey || "",
         alias,
         raw_positive: rawPositive,
         positive: enabled ? applyAlias(rawPositive, alias) : "",
-        negative: enabled ? (negativeOverride || libraryNegative) : "",
+        negative: enabled ? rawNegative : "",
         library_positive: libraryPositive,
         library_negative: libraryNegative,
-        tags: enabled ? (preset?.tags ?? []) : [],
+        tags: enabled ? tags : [],
+        addenda: addenda.enabled,
+        addenda_identity: addenda.identity,
         label: preset?.label ?? NONE_LABEL,
         preset: preset?.key ?? NONE_KEY,
         enabled,
@@ -311,11 +357,68 @@ app.registerExtension({
         const preset = node.widgets?.find((widget) => widget.name === "preset");
         if (!category || !subcategory || !preset) return;
 
+        const enabledAddenda = node.widgets?.find(
+            (widget) => widget.name === "enabled_addenda",
+        );
+        if (enabledAddenda) {
+            enabledAddenda.computeSize = () => [0, -4];
+            enabledAddenda.hidden = true;
+        }
+        let addendaWidgets = [];
+
         normalizeSeedWidget(
             node.widgets?.find((widget) => widget.name === "seed"),
         );
 
         let catalog = [];
+
+        const updateAddenda = () => {
+            for (const widget of addendaWidgets) {
+                const index = node.widgets?.indexOf(widget) ?? -1;
+                if (index >= 0) node.widgets.splice(index, 1);
+                widget.onRemove?.();
+            }
+            addendaWidgets = [];
+            const selectedCategory = catalog.find((item) => item.key === category.value);
+            const selectedSubcategory = selectedCategory?.subcategories?.find(
+                (item) => item.key === subcategory.value,
+            );
+            const candidates = selectedSubcategory?.presets ?? [];
+            const variable = String(widgetValue(node, "template_variable") ?? "").trim();
+            const seed = widgetValue(node, "seed") ?? 0;
+            const selectedPreset = preset.value === RANDOM_KEY
+                ? candidates[stableChoice(seed, [variable, category.value, subcategory.value], candidates.length)]
+                : candidates.find((item) => item.key === preset.value);
+            if (!selectedPreset || !enabledAddenda) return;
+
+            const state = resolvedAddenda(
+                selectedPreset, category.value, subcategory.value, enabledAddenda.value,
+            );
+            const selectedKeys = new Set(state.enabled);
+            enabledAddenda.value = JSON.stringify({
+                preset: state.identity,
+                enabled: [...selectedKeys],
+            });
+            for (const addendum of selectedPreset.addenda ?? []) {
+                const toggle = node.addWidget(
+                    "toggle",
+                    `Add: ${addendum.label}`,
+                    selectedKeys.has(addendum.key),
+                    (value) => {
+                        if (value) selectedKeys.add(addendum.key);
+                        else selectedKeys.delete(addendum.key);
+                        enabledAddenda.value = JSON.stringify({
+                            preset: state.identity,
+                            enabled: [...selectedKeys],
+                        });
+                        refreshComposerPreviews();
+                        node.setDirtyCanvas(true, true);
+                    },
+                    {serialize: false},
+                );
+                addendaWidgets.push(toggle);
+            }
+        };
 
         const updatePreset = () => {
             const selectedCategory = catalog.find((item) => item.key === category.value);
@@ -323,6 +426,7 @@ app.registerExtension({
                 (item) => item.key === subcategory.value,
             );
             retainOrNone(preset, selectedSubcategory?.presets ?? [], true);
+            updateAddenda();
             node.setDirtyCanvas(true, true);
             refreshComposerPreviews();
         };
@@ -348,6 +452,7 @@ app.registerExtension({
         subcategory.callback = () => { clearOverrides(); updatePreset(); };
         preset.callback = () => {
             clearOverrides();
+            updateAddenda();
             refreshComposerPreviews();
         };
         const alias = node.widgets?.find((widget) => widget.name === "alias");
@@ -366,7 +471,9 @@ app.registerExtension({
             const widget = node.widgets?.find((item) => item.name === name);
             if (!widget) continue;
             widget.label = label;
-            widget.callback = refreshComposerPreviews;
+            widget.callback = name === "seed"
+                ? () => { updateAddenda(); refreshComposerPreviews(); }
+                : refreshComposerPreviews;
         }
 
         node.addWidget("button", "Load selected into overrides", null, () => {
