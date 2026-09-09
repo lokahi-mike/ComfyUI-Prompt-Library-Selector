@@ -77,6 +77,8 @@ can confuse that mode string with the numeric seed value.
 
 - Runs locally as a single JavaScript-only HTML page
 - Visual editors for libraries and templates—raw YAML editing is optional
+- Dedicated Character Builder with live atomic-preset assembly
+- Private reusable character-parts collection kept out of runtime dropdowns
 - Collapsible category and subcategory trees with remembered UI state
 - Automatic snake-case stable keys with duplicate-key validation
 - Live generated YAML with internal round-trip validation
@@ -153,13 +155,19 @@ Replace the host and port if your ComfyUI address is different. You may also
 open `tools/yaml-library-builder.html` directly for completely offline use.
 
 Create presets under **Library**, create a framework under **Templates**, and
-use **Prompt Playground** to verify the assembled result. Download the generated
-YAML as `prompt_library.yml` and place it in
-`ComfyUI/user/prompt_library_selector/`.
+use **Prompt Playground** to verify the assembled result. When opened through
+ComfyUI, **Load active library** reads the file currently in use and **Save to
+ComfyUI** safely writes it to
+`ComfyUI/user/prompt_library_selector/prompt_library.yml`.
 
-The Workbench deliberately does not overwrite server files. Its working state
-is stored in that browser, and **Download YAML** or **Copy YAML** gives you the
-finished library.
+The optional **Auto-save** switch writes valid changes after a short delay and
+notifies open Selector and Composer nodes to refresh. It is deliberately off
+when the page opens. Every server save validates the YAML, writes atomically,
+and preserves the previous user file as `prompt_library.backup.yml`.
+
+**Download YAML** and **Copy YAML** remain available for portable or completely
+offline editing. Directly opening the HTML file does not grant filesystem write
+access, so server load/save controls require the ComfyUI-hosted address.
 
 ### 2. Add selector nodes
 
@@ -347,6 +355,33 @@ The sample preview updates immediately. Template text can remain scene-specific
 while characters, wardrobes, poses, lighting, and other useful pieces stay
 swappable.
 
+### Character Builder
+
+Build one coherent character preset from identity, age, build, proportions,
+anatomy, face, hair, distinguishing features, and consistency guidance. The
+live preview adds `{{subject}}` correctly, supports an optional LoRA trigger,
+generates stable keys, checks destination duplicates, and can either add the
+finished character directly to the Library or copy it as importable JSON.
+
+Reusable fragments live in the Builder's separate **Private Character Parts**
+collection. Save and apply parts such as a body build, face description, hair,
+or identity-preservation language without putting those fragments into
+`prompt_library.yml` or cluttering ComfyUI dropdowns. Parts persist in browser
+storage and can be backed up or restored as JSON.
+
+The recommended organization deliberately stays three levels deep:
+
+```text
+Characters → Actresses → Florence Pugh
+Characters → Original Women → Nadia
+Characters → Musicians → Example Musician
+Characters → LoRA-Trained Women → Rhiannon
+```
+
+These names are conventions, not requirements. A fourth runtime hierarchy
+level would add another selector to every workflow; narrower subcategories or
+future search/filtering scale more cleanly.
+
 ### Prompt Playground
 
 The Playground assembles a selected template entirely in the browser. Choose a
@@ -460,8 +495,10 @@ well for long prompt text.
 ## Privacy and portability
 
 The library is a local YAML file. The Workbench is a static HTML application
-with no analytics, accounts, build process, or external API calls. Its draft
-state remains in browser local storage. Nothing is uploaded by this project.
+with no analytics, accounts, build process, or external services. Its draft
+state and private Character Parts remain in browser local storage. When opened
+through ComfyUI, its same-origin API reads and writes only the local user
+library described above. Nothing is uploaded by this project.
 
 One file can be copied between computers, synchronized privately, backed up, or
 versioned with Git. A database is not required for ordinary-sized libraries.
@@ -485,10 +522,15 @@ versioned with Git. A database is not required for ordinary-sized libraries.
 - Confirm you pulled the current Python and frontend files.
 - Restart ComfyUI and perform a browser hard refresh after updating the node.
 
-### The Workbench does not overwrite prompt_library.yml
+### Workbench server save is unavailable
 
-This is intentional. Use **Download YAML** and replace the file yourself. Keep a
-backup if the library contains important custom work.
+- Open the Workbench from ComfyUI's
+  `/prompt-library-selector/builder` address rather than directly from disk or
+  another lightweight file server.
+- Pull the current plugin version, restart ComfyUI, and hard-refresh the page.
+- Fix any validation errors shown below Generated YAML before saving.
+- The previous successful user file is retained as
+  `prompt_library.backup.yml` beside the active library.
 
 ### Negative prompts seem ineffective
 

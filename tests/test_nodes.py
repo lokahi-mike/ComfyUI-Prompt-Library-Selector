@@ -27,6 +27,10 @@ def load_nodes_module():
         def get(_path):
             return lambda function: function
 
+        @staticmethod
+        def put(_path):
+            return lambda function: function
+
     server = types.ModuleType("server")
     server.PromptServer = types.SimpleNamespace(
         instance=types.SimpleNamespace(routes=Routes())
@@ -260,6 +264,26 @@ class NodeIntegrationTests(unittest.TestCase):
             self.nodes.folder_paths = original_folder_paths
             self.nodes._MANAGED_LIBRARY.path = original_path
             self.nodes.LIBRARY = injected_library
+
+    def test_user_library_save_is_validated_backed_up_and_atomic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target, backup = self.nodes.save_user_library(SAMPLE, directory)
+            self.assertEqual(
+                target,
+                Path(directory) / "prompt_library_selector" /
+                "prompt_library.yml",
+            )
+            self.assertIsNone(backup)
+            self.assertEqual(target.read_text(encoding="utf-8"), SAMPLE)
+
+            updated = SAMPLE.replace("label: Alpha", "label: Updated Alpha")
+            target, backup = self.nodes.save_user_library(updated, directory)
+            self.assertEqual(target.read_text(encoding="utf-8"), updated)
+            self.assertEqual(backup.read_text(encoding="utf-8"), SAMPLE)
+
+            with self.assertRaises(ValueError):
+                self.nodes.save_user_library("categories: []", directory)
+            self.assertEqual(target.read_text(encoding="utf-8"), updated)
 
 
 if __name__ == "__main__":

@@ -68,10 +68,12 @@
     h1 { font-size: 1.12rem; margin: 0; letter-spacing: .01em; }
     .subtitle { color: var(--muted); font-size: .82rem; margin-top: .18rem; }
     .actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
-    .tabs { display: flex; gap: .35rem; padding: .55rem 1rem 0; max-width: 48rem; margin: 0 auto; }
+    .autosave { display: flex; align-items: center; gap: .4rem; padding: 0 .25rem; white-space: nowrap; }
+    .autosave input { width: auto; }
+    .tabs { display: flex; gap: .35rem; padding: .55rem 1rem 0; max-width: 62rem; margin: 0 auto; }
     .tabs button { flex: 1; color: var(--muted); background: transparent; border-color: transparent; }
     .tabs button.active { color: var(--text); background: var(--panel); border-color: var(--line); border-bottom-color: var(--panel); }
-    #fileInput { display: none; }
+    #fileInput, #characterPartsFile { display: none; }
 
     main {
       display: grid;
@@ -221,9 +223,18 @@
     .import-preview { border: 1px solid var(--line); border-radius: 10px; padding: .75rem; color: var(--muted); font-size: .78rem; line-height: 1.55; white-space: pre-wrap; }
     .import-preview.good { border-color: rgba(114, 211, 161, .38); color: var(--good); }
     .import-preview.bad { border-color: rgba(239, 111, 117, .55); color: #ffb8bc; }
+    #characterView { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .character-fields { display: grid; gap: .85rem; }
+    .character-fields textarea { min-height: 5.2rem; }
+    #characterPromptPreview { min-height: 24rem; }
+    .character-parts { border: 1px solid var(--line); border-radius: 11px; padding: .8rem; display: grid; gap: .7rem; }
+    .character-parts h3 { margin: 0; font-size: .84rem; color: var(--accent-2); }
+    .part-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
 
     @media (max-width: 1050px) {
       main { grid-template-columns: minmax(220px, .8fr) minmax(340px, 1.2fr); }
+      #characterView { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #characterView .preview-panel { grid-column: 1 / -1; }
       .preview-panel { grid-column: 1 / -1; min-height: 34rem; }
     }
 
@@ -231,6 +242,7 @@
       header { align-items: flex-start; flex-direction: column; position: static; }
       .actions { justify-content: flex-start; }
       main { grid-template-columns: 1fr; }
+      #characterView { grid-template-columns: 1fr; }
       .preview-panel { grid-column: auto; }
     }
   </style>
@@ -245,6 +257,10 @@
       <button id="newButton" class="ghost">New library</button>
       <button id="importButton">Import YAML</button>
       <button id="importSectionsButton">Import sections</button>
+      <button id="loadServerButton">Load active library</button>
+      <button id="saveServerButton">Save to ComfyUI</button>
+      <label class="autosave"><input id="serverAutosave" type="checkbox">Auto-save</label>
+      <span id="serverStatus" class="privacy"></span>
       <input id="fileInput" type="file" accept=".yml,.yaml,text/yaml">
       <button id="copyButton">Copy YAML</button>
       <button id="downloadButton" class="primary">Download YAML</button>
@@ -253,6 +269,7 @@
 
   <nav class="tabs" aria-label="Workbench sections">
     <button data-view="library" class="active">Library</button>
+    <button data-view="characters">Character Builder</button>
     <button data-view="templates">Templates</button>
     <button data-view="playground">Prompt Playground</button>
   </nav>
@@ -283,6 +300,70 @@
       <div class="panel-head"><h2>Generated YAML</h2><span id="entryCount" class="privacy"></span></div>
       <textarea id="yamlOutput" readonly spellcheck="false" aria-label="Generated YAML"></textarea>
       <div id="status" class="status">Ready.</div>
+    </section>
+  </main>
+
+  <main id="characterView" hidden>
+    <section class="panel">
+      <div class="panel-head"><h2>Identity and Destination</h2><span class="privacy">Creates one atomic character preset</span></div>
+      <div class="panel-body character-fields">
+        <p class="hint">Keep all persistent identity and physical traits together. The builder adds the finished character to the normal three-level Library hierarchy.</p>
+        <label>Character category<input id="characterCategoryLabel" list="characterCategoryOptions" value="Characters"></label>
+        <datalist id="characterCategoryOptions"></datalist>
+        <label>Category stable key<input id="characterCategoryKey" value="characters"></label>
+        <label>Character subcategory<input id="characterSubcategoryLabel" list="characterSubcategoryOptions" value="Original Characters"></label>
+        <datalist id="characterSubcategoryOptions"></datalist>
+        <label>Subcategory stable key<input id="characterSubcategoryKey" value="original_characters"></label>
+        <label>Display name<input id="characterName" placeholder="Mara Vale"></label>
+        <label>Character stable key<input id="characterKey" placeholder="mara_vale"></label>
+        <label>LoRA tag or trigger prefix (optional)<input id="characterTrigger" placeholder="&lt;lora:character_name:0.85&gt;"></label>
+        <label>Identity / opening description<textarea id="characterIdentity" placeholder="an adult woman named Mara Vale with a composed, self-assured presence"></textarea></label>
+        <div class="character-parts">
+          <h3>Private Character Parts</h3>
+          <p class="hint">Save reusable fragments here without adding them to the exported prompt library.</p>
+          <label>Part type<select id="characterPartType"></select></label>
+          <label>Saved part<select id="characterPartPreset"></select></label>
+          <label>Part name<input id="characterPartName" placeholder="Compact Mature Build"></label>
+          <div class="part-actions">
+            <button id="saveCharacterPart">Save</button>
+            <button id="applyCharacterPart">Apply</button>
+            <button id="deleteCharacterPart" class="danger">Delete</button>
+          </div>
+          <div class="toolbar-row">
+            <button id="exportCharacterParts" class="ghost">Copy parts JSON</button>
+            <button id="importCharacterParts" class="ghost">Import parts JSON</button>
+            <input id="characterPartsFile" type="file" accept=".json,application/json">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Persistent Appearance</h2><span class="privacy">Use complete sentences</span></div>
+      <div class="panel-body character-fields">
+        <label>Age and presentation<textarea id="characterAge" placeholder="She appears approximately 40 years old, with an authentically mature appearance."></textarea></label>
+        <label>Height, stature, and overall build<textarea id="characterBuild" placeholder="She is short, with a compact, naturally full build and grounded proportions."></textarea></label>
+        <label>Body proportions<textarea id="characterProportions" placeholder="Her proportions include..."></textarea></label>
+        <label>Anatomy and persistent body details<textarea id="characterAnatomy" placeholder="Include only persistent visual details that matter to the character."></textarea></label>
+        <label>Face, eyes, and skin<textarea id="characterFace" placeholder="Her face has..."></textarea></label>
+        <label>Hair<textarea id="characterHair" placeholder="Her hair is..."></textarea></label>
+        <label>Distinguishing features<textarea id="characterFeatures" placeholder="A small scar through her left eyebrow remains consistent."></textarea></label>
+        <label>Identity consistency guidance<textarea id="characterConsistency" placeholder="Preserve her recognizable identity, age, stature, and established proportions across the series."></textarea></label>
+      </div>
+    </section>
+
+    <section class="panel preview-panel">
+      <div class="panel-head"><h2>Character Preset Preview</h2><span id="characterBuilderStatus" class="privacy">Complete a name and description</span></div>
+      <div class="panel-body character-fields">
+        <label>Positive prompt<textarea id="characterPromptPreview" readonly></textarea></label>
+        <label>Negative prompt<textarea id="characterNegative" placeholder="inconsistent identity, altered age, altered body proportions"></textarea></label>
+        <label>Tags<input id="characterTags" placeholder="adult, original_character"></label>
+        <div class="toolbar-row">
+          <button id="copyCharacterPacket" class="ghost">Copy import JSON</button>
+          <button id="addCharacterToLibrary" class="primary">Add to Library</button>
+        </div>
+        <p class="hint">After adding, the preset remains fully editable in the Library tab. Duplicate stable keys are never overwritten.</p>
+      </div>
     </section>
   </main>
 
@@ -359,6 +440,25 @@
     const STORAGE_KEY = "prompt-library-yaml-builder-v1";
     const UI_STORAGE_KEY = "prompt-library-yaml-builder-ui-v1";
     const PLAYGROUND_STORAGE_KEY = "prompt-library-yaml-builder-playground-v1";
+    const CHARACTER_STORAGE_KEY = "prompt-library-character-builder-v1";
+    const CHARACTER_PART_FIELDS = {
+      identity: ["Identity / Opening", "characterIdentity"],
+      age: ["Age and Presentation", "characterAge"],
+      build: ["Height and Build", "characterBuild"],
+      proportions: ["Body Proportions", "characterProportions"],
+      anatomy: ["Anatomy and Body Details", "characterAnatomy"],
+      face: ["Face, Eyes, and Skin", "characterFace"],
+      hair: ["Hair", "characterHair"],
+      features: ["Distinguishing Features", "characterFeatures"],
+      consistency: ["Consistency Guidance", "characterConsistency"],
+    };
+    const CHARACTER_INPUT_IDS = [
+      "characterCategoryLabel", "characterCategoryKey",
+      "characterSubcategoryLabel", "characterSubcategoryKey",
+      "characterName", "characterKey", "characterTrigger",
+      ...Object.values(CHARACTER_PART_FIELDS).map((entry) => entry[1]),
+      "characterNegative", "characterTags",
+    ];
     const RANDOM_KEY = "__random__";
     const makeId = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const slugify = (value) => String(value ?? "")
@@ -378,7 +478,9 @@
     let selection = firstSelection(state);
     let templateSelection = firstTemplateSelection(state);
     let playground = loadPlayground();
+    let characterBuilder = loadCharacterBuilder();
     let activeView = "library";
+    let serverSaveTimer;
 
     function blankState() {
       return { version: 3, templateCategories: [], categories: [] };
@@ -509,6 +611,222 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
 
+    function setServerStatus(message, failed = false) {
+      const output = document.querySelector("#serverStatus");
+      output.textContent = message;
+      output.style.color = failed ? "#ffb8bc" : "var(--good)";
+    }
+
+    async function saveLibraryToComfyUI({ quiet = false } = {}) {
+      const yaml = generateYaml();
+      const errors = [...validate(), ...roundTripErrors(yaml)];
+      if (errors.length) {
+        if (!quiet) alert(`Fix these issues before saving:\n\n${errors.join("\n")}`);
+        setServerStatus("Not saved: library has errors", true);
+        return false;
+      }
+      try {
+        setServerStatus("Saving…");
+        const response = await fetch("/prompt-library-selector/library-source", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ yaml }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || `Server returned ${response.status}`);
+        setServerStatus("Saved to ComfyUI");
+        const status = document.querySelector("#status");
+        status.className = "status good";
+        status.textContent = `Saved to ${result.library_path}${result.backup_path ? " · previous file backed up" : ""}`;
+        return true;
+      } catch (error) {
+        setServerStatus("ComfyUI save unavailable", true);
+        if (!quiet) alert(`Unable to save through ComfyUI: ${error.message}\n\nOpen this Workbench from ComfyUI's /prompt-library-selector/builder address.`);
+        return false;
+      }
+    }
+
+    function scheduleServerAutosave() {
+      if (!document.querySelector("#serverAutosave")?.checked) return;
+      clearTimeout(serverSaveTimer);
+      setServerStatus("Unsaved changes");
+      serverSaveTimer = setTimeout(() => saveLibraryToComfyUI({ quiet: true }), 900);
+    }
+
+    async function loadLibraryFromComfyUI() {
+      if ((state.categories.length || state.templateCategories.length)
+        && !confirm("Replace the current browser Workbench library with ComfyUI's active library? Private Character Parts will be preserved.")) return;
+      try {
+        setServerStatus("Loading…");
+        const response = await fetch("/prompt-library-selector/library-source", { cache: "no-store" });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || `Server returned ${response.status}`);
+        state = parseYaml(result.yaml);
+        expandedIds.clear();
+        selection = firstSelection(state);
+        templateSelection = firstTemplateSelection(state);
+        playground.templateId = allTemplates()[0]?.template.id ?? null;
+        playground.selections = {};
+        playground.overrides = {};
+        render();
+        setServerStatus(result.using_user_library ? "Loaded user library" : "Loaded bundled fallback");
+      } catch (error) {
+        setServerStatus("ComfyUI load unavailable", true);
+        alert(`Unable to load from ComfyUI: ${error.message}\n\nOpen this Workbench from ComfyUI's /prompt-library-selector/builder address.`);
+      }
+    }
+
+    function blankCharacterBuilder() {
+      return {
+        draft: {
+          characterCategoryLabel: "Characters",
+          characterCategoryKey: "characters",
+          characterSubcategoryLabel: "Original Characters",
+          characterSubcategoryKey: "original_characters",
+        },
+        autoKeys: { category: true, subcategory: true, character: true },
+        parts: Object.fromEntries(Object.keys(CHARACTER_PART_FIELDS).map((key) => [key, []])),
+      };
+    }
+
+    function loadCharacterBuilder() {
+      const fallback = blankCharacterBuilder();
+      try {
+        const saved = JSON.parse(localStorage.getItem(CHARACTER_STORAGE_KEY));
+        if (!saved || typeof saved !== "object") return fallback;
+        fallback.draft = { ...fallback.draft, ...(saved.draft || {}) };
+        fallback.autoKeys = { ...fallback.autoKeys, ...(saved.autoKeys || {}) };
+        for (const type of Object.keys(CHARACTER_PART_FIELDS)) {
+          const parts = saved.parts?.[type];
+          if (Array.isArray(parts)) fallback.parts[type] = parts
+            .filter((part) => part && typeof part === "object" && String(part.text || "").trim())
+            .map((part) => ({
+              id: String(part.id || makeId()),
+              key: String(part.key || slugify(part.label)),
+              label: String(part.label || part.key || "Untitled Part"),
+              text: String(part.text || ""),
+            }));
+        }
+      } catch (error) {
+        console.warn("Unable to restore character builder", error);
+      }
+      return fallback;
+    }
+
+    function saveCharacterBuilder() {
+      localStorage.setItem(CHARACTER_STORAGE_KEY, JSON.stringify(characterBuilder));
+    }
+
+    function completeSentence(value) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      return /[.!?]$/.test(text) ? text : `${text}.`;
+    }
+
+    function assembledCharacterPrompt() {
+      const draft = characterBuilder.draft;
+      const identity = String(draft.characterIdentity || draft.characterName || "").trim();
+      let opening = "";
+      if (identity) {
+        opening = /{{\s*subject\s*}}/i.test(identity)
+          ? completeSentence(identity)
+          : completeSentence(`{{subject}} is ${identity}`);
+      }
+      const details = Object.entries(CHARACTER_PART_FIELDS)
+        .filter(([type]) => type !== "identity")
+        .map(([, entry]) => completeSentence(draft[entry[1]]))
+        .filter(Boolean);
+      const prompt = [opening, ...details].filter(Boolean).join(" ");
+      const trigger = String(draft.characterTrigger || "").trim();
+      return trigger && prompt ? `${trigger}, ${prompt}` : (trigger || prompt);
+    }
+
+    function characterPacket() {
+      const draft = characterBuilder.draft;
+      return {
+        items: [{
+          type: "preset",
+          category: {
+            key: String(draft.characterCategoryKey || "").trim(),
+            label: String(draft.characterCategoryLabel || "").trim(),
+            template_slot: "character",
+          },
+          subcategory: {
+            key: String(draft.characterSubcategoryKey || "").trim(),
+            label: String(draft.characterSubcategoryLabel || "").trim(),
+          },
+          key: String(draft.characterKey || "").trim(),
+          label: String(draft.characterName || "").trim(),
+          prompt: assembledCharacterPrompt(),
+          negative_prompt: String(draft.characterNegative || "").trim(),
+          tags: splitTags(draft.characterTags),
+        }],
+      };
+    }
+
+    function updateCharacterDestinationOptions() {
+      const categoryList = document.querySelector("#characterCategoryOptions");
+      const subcategoryList = document.querySelector("#characterSubcategoryOptions");
+      if (!categoryList || !subcategoryList) return;
+      categoryList.replaceChildren(...state.categories.map((category) => {
+        const option = document.createElement("option"); option.value = category.label; return option;
+      }));
+      const categoryKey = characterBuilder.draft.characterCategoryKey;
+      const category = state.categories.find((item) => item.key === categoryKey);
+      subcategoryList.replaceChildren(...(category?.subcategories ?? []).map((subcategory) => {
+        const option = document.createElement("option"); option.value = subcategory.label; return option;
+      }));
+    }
+
+    function updateCharacterPreview() {
+      const prompt = assembledCharacterPrompt();
+      document.querySelector("#characterPromptPreview").value = prompt;
+      const status = document.querySelector("#characterBuilderStatus");
+      const add = document.querySelector("#addCharacterToLibrary");
+      const draft = characterBuilder.draft;
+      const keyPattern = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+      let message = prompt ? `${prompt.length} characters` : "Complete a name and description";
+      let valid = Boolean(prompt && draft.characterName
+        && keyPattern.test(draft.characterCategoryKey || "")
+        && keyPattern.test(draft.characterSubcategoryKey || "")
+        && keyPattern.test(draft.characterKey || ""));
+      const path = `preset:${draft.characterCategoryKey}/${draft.characterSubcategoryKey}/${draft.characterKey}`;
+      const duplicate = valid && existingImportPaths().has(path);
+      if (!valid) message = "Complete the name, description, and valid stable keys";
+      if (duplicate) message = "That destination already contains this stable key";
+      add.disabled = !valid || duplicate;
+      document.querySelector("#copyCharacterPacket").disabled = !valid;
+      status.textContent = message;
+      status.style.color = valid ? "var(--good)" : "var(--muted)";
+      saveCharacterBuilder();
+    }
+
+    function renderCharacterBuilder() {
+      for (const id of CHARACTER_INPUT_IDS) {
+        const input = document.getElementById(id);
+        if (input) input.value = characterBuilder.draft[id] || "";
+      }
+      updateCharacterDestinationOptions();
+      renderCharacterPartOptions();
+      updateCharacterPreview();
+    }
+
+    function renderCharacterPartOptions() {
+      const typeSelect = document.querySelector("#characterPartType");
+      const previousType = typeSelect.value || Object.keys(CHARACTER_PART_FIELDS)[0];
+      typeSelect.replaceChildren(...Object.entries(CHARACTER_PART_FIELDS).map(([key, entry]) => new Option(entry[0], key)));
+      typeSelect.value = CHARACTER_PART_FIELDS[previousType] ? previousType : Object.keys(CHARACTER_PART_FIELDS)[0];
+      const presetSelect = document.querySelector("#characterPartPreset");
+      const previousPreset = presetSelect.value;
+      const parts = [...characterBuilder.parts[typeSelect.value]].sort((left, right) => left.label.localeCompare(right.label));
+      presetSelect.replaceChildren(new Option(parts.length ? "Choose a saved part" : "No saved parts", ""), ...parts.map((part) => new Option(part.label, part.id)));
+      if (parts.some((part) => part.id === previousPreset)) presetSelect.value = previousPreset;
+      const selected = parts.find((part) => part.id === presetSelect.value);
+      document.querySelector("#characterPartName").value = selected?.label || "";
+      document.querySelector("#applyCharacterPart").disabled = !selected;
+      document.querySelector("#deleteCharacterPart").disabled = !selected;
+    }
+
     function loadExpandedIds() {
       try {
         const saved = JSON.parse(localStorage.getItem(UI_STORAGE_KEY));
@@ -617,6 +935,8 @@
       renderEditor();
       renderTemplates();
       renderPlayground();
+      updateCharacterDestinationOptions();
+      updateCharacterPreview();
       const yaml = generateYaml();
       document.querySelector("#yamlOutput").value = yaml;
       const errors = [...validate(), ...roundTripErrors(yaml)];
@@ -625,6 +945,7 @@
       status.textContent = errors.length ? errors.join(" • ") : "Valid library schema — ready to download.";
       const presetCount = state.categories.reduce((sum, category) => sum + category.subcategories.reduce((inner, subcategory) => inner + subcategory.presets.length, 0), 0);
       document.querySelector("#entryCount").textContent = `${state.categories.length} categories · ${presetCount} presets`;
+      scheduleServerAutosave();
     }
 
     function renderTree() {
@@ -867,6 +1188,7 @@
       const status = document.querySelector("#status");
       status.className = `status ${errors.length ? "bad" : "good"}`;
       status.textContent = errors.length ? errors.join(" • ") : "Valid library schema — ready to download.";
+      scheduleServerAutosave();
     }
 
     function selectedTemplate() {
@@ -1222,6 +1544,7 @@
       if (listButton) listButton.innerHTML = `${escapeHtml(selected.item.label || "Untitled")} <span class="key">${escapeHtml(selected.item.key || "missing-key")}</span>`;
       document.querySelector("#templateLivePreview").value = sampleTemplatePreview(template);
       renderPlayground();
+      scheduleServerAutosave();
     }
 
     function sampleTemplatePreview(template) {
@@ -1969,16 +2292,159 @@
     document.querySelector("#addTemplateCategory").addEventListener("click", addTemplateCategory);
     document.querySelector("#addTemplateSubcategory").addEventListener("click", addTemplateSubcategory);
     document.querySelector("#addTemplate").addEventListener("click", addTemplate);
+
+    function showView(view) {
+      activeView = view;
+      for (const item of document.querySelectorAll("[data-view]")) item.classList.toggle("active", item.dataset.view === view);
+      document.querySelector("#libraryView").hidden = view !== "library";
+      document.querySelector("#characterView").hidden = view !== "characters";
+      document.querySelector("#templatesView").hidden = view !== "templates";
+      document.querySelector("#playgroundView").hidden = view !== "playground";
+      if (view === "characters") renderCharacterBuilder();
+      if (view === "playground") renderPlayground();
+    }
+
     for (const button of document.querySelectorAll("[data-view]")) {
-      button.addEventListener("click", () => {
-        activeView = button.dataset.view;
-        for (const item of document.querySelectorAll("[data-view]")) item.classList.toggle("active", item === button);
-        document.querySelector("#libraryView").hidden = activeView !== "library";
-        document.querySelector("#templatesView").hidden = activeView !== "templates";
-        document.querySelector("#playgroundView").hidden = activeView !== "playground";
-        if (activeView === "playground") renderPlayground();
+      button.addEventListener("click", () => showView(button.dataset.view));
+    }
+
+    for (const id of CHARACTER_INPUT_IDS) {
+      document.getElementById(id).addEventListener("input", (event) => {
+        const previous = characterBuilder.draft[id] || "";
+        characterBuilder.draft[id] = event.target.value;
+        if (id === "characterName" && characterBuilder.autoKeys.character) {
+          characterBuilder.draft.characterKey = slugify(event.target.value);
+          document.querySelector("#characterKey").value = characterBuilder.draft.characterKey;
+        }
+        if (id === "characterCategoryLabel") {
+          const match = state.categories.find((item) => item.label.toLowerCase() === event.target.value.trim().toLowerCase());
+          if (match) {
+            characterBuilder.draft.characterCategoryKey = match.key;
+            characterBuilder.autoKeys.category = true;
+          } else if (characterBuilder.autoKeys.category || !previous) {
+            characterBuilder.draft.characterCategoryKey = slugify(event.target.value);
+          }
+          document.querySelector("#characterCategoryKey").value = characterBuilder.draft.characterCategoryKey;
+          updateCharacterDestinationOptions();
+        }
+        if (id === "characterSubcategoryLabel") {
+          const category = state.categories.find((item) => item.key === characterBuilder.draft.characterCategoryKey);
+          const match = category?.subcategories.find((item) => item.label.toLowerCase() === event.target.value.trim().toLowerCase());
+          if (match) {
+            characterBuilder.draft.characterSubcategoryKey = match.key;
+            characterBuilder.autoKeys.subcategory = true;
+          } else if (characterBuilder.autoKeys.subcategory || !previous) {
+            characterBuilder.draft.characterSubcategoryKey = slugify(event.target.value);
+          }
+          document.querySelector("#characterSubcategoryKey").value = characterBuilder.draft.characterSubcategoryKey;
+        }
+        if (id === "characterCategoryKey") characterBuilder.autoKeys.category = false;
+        if (id === "characterSubcategoryKey") characterBuilder.autoKeys.subcategory = false;
+        if (id === "characterKey") characterBuilder.autoKeys.character = false;
+        updateCharacterPreview();
       });
     }
+
+    document.querySelector("#characterPartType").addEventListener("change", renderCharacterPartOptions);
+    document.querySelector("#characterPartPreset").addEventListener("change", () => {
+      const type = document.querySelector("#characterPartType").value;
+      const selected = characterBuilder.parts[type].find((part) => part.id === document.querySelector("#characterPartPreset").value);
+      document.querySelector("#characterPartName").value = selected?.label || "";
+      document.querySelector("#applyCharacterPart").disabled = !selected;
+      document.querySelector("#deleteCharacterPart").disabled = !selected;
+    });
+    document.querySelector("#saveCharacterPart").addEventListener("click", () => {
+      const type = document.querySelector("#characterPartType").value;
+      const fieldId = CHARACTER_PART_FIELDS[type][1];
+      const text = String(characterBuilder.draft[fieldId] || "").trim();
+      const label = document.querySelector("#characterPartName").value.trim();
+      if (!label || !text) return alert("Give the part a name and enter text in its matching character field first.");
+      const selectedId = document.querySelector("#characterPartPreset").value;
+      let part = characterBuilder.parts[type].find((item) => item.id === selectedId);
+      if (!part) {
+        const used = new Set(characterBuilder.parts[type].map((item) => item.key));
+        let key = slugify(label) || "character_part";
+        let suffix = 2;
+        while (used.has(key)) key = `${slugify(label) || "character_part"}_${suffix++}`;
+        part = { id: makeId(), key, label, text };
+        characterBuilder.parts[type].push(part);
+      } else {
+        part.label = label; part.text = text;
+      }
+      saveCharacterBuilder();
+      renderCharacterPartOptions();
+      document.querySelector("#characterPartPreset").value = part.id;
+      document.querySelector("#characterPartName").value = part.label;
+      document.querySelector("#applyCharacterPart").disabled = false;
+      document.querySelector("#deleteCharacterPart").disabled = false;
+    });
+    document.querySelector("#applyCharacterPart").addEventListener("click", () => {
+      const type = document.querySelector("#characterPartType").value;
+      const part = characterBuilder.parts[type].find((item) => item.id === document.querySelector("#characterPartPreset").value);
+      if (!part) return;
+      const fieldId = CHARACTER_PART_FIELDS[type][1];
+      characterBuilder.draft[fieldId] = part.text;
+      document.getElementById(fieldId).value = part.text;
+      updateCharacterPreview();
+    });
+    document.querySelector("#deleteCharacterPart").addEventListener("click", () => {
+      const type = document.querySelector("#characterPartType").value;
+      const selectedId = document.querySelector("#characterPartPreset").value;
+      const part = characterBuilder.parts[type].find((item) => item.id === selectedId);
+      if (!part || !confirm(`Delete the private part “${part.label}”?`)) return;
+      characterBuilder.parts[type] = characterBuilder.parts[type].filter((item) => item.id !== selectedId);
+      saveCharacterBuilder();
+      renderCharacterPartOptions();
+    });
+    document.querySelector("#exportCharacterParts").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(JSON.stringify({ version: 1, parts: characterBuilder.parts }, null, 2));
+      document.querySelector("#characterBuilderStatus").textContent = "Character parts JSON copied";
+    });
+    document.querySelector("#importCharacterParts").addEventListener("click", () => document.querySelector("#characterPartsFile").click());
+    document.querySelector("#characterPartsFile").addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        const imported = JSON.parse(await file.text());
+        if (!imported.parts || typeof imported.parts !== "object") throw new Error("The file has no character parts collection.");
+        let added = 0;
+        for (const type of Object.keys(CHARACTER_PART_FIELDS)) {
+          if (!Array.isArray(imported.parts[type])) continue;
+          const used = new Set(characterBuilder.parts[type].map((part) => part.key));
+          for (const raw of imported.parts[type]) {
+            const label = String(raw?.label || "").trim();
+            const text = String(raw?.text || "").trim();
+            const key = String(raw?.key || slugify(label));
+            if (!label || !text || used.has(key)) continue;
+            characterBuilder.parts[type].push({ id: makeId(), key, label, text });
+            used.add(key); added += 1;
+          }
+        }
+        saveCharacterBuilder(); renderCharacterPartOptions();
+        document.querySelector("#characterBuilderStatus").textContent = `${added} private character parts imported`;
+      } catch (error) {
+        alert(`Character parts import failed: ${error.message}`);
+      } finally {
+        event.target.value = "";
+      }
+    });
+    document.querySelector("#copyCharacterPacket").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(JSON.stringify(characterPacket(), null, 2));
+      document.querySelector("#characterBuilderStatus").textContent = "Character import JSON copied";
+    });
+    document.querySelector("#addCharacterToLibrary").addEventListener("click", () => {
+      const items = parseImportPacket(JSON.stringify(characterPacket()));
+      const analysis = analyzeImport(items);
+      if (!analysis.valid.length) return alert("That stable key already exists in the selected destination.");
+      applyImport(analysis.valid);
+      const destinationCategory = state.categories.find((item) => item.key === items[0].category.key);
+      if (destinationCategory && !destinationCategory.templateSlot) destinationCategory.templateSlot = "character";
+      render();
+      showView("library");
+      const status = document.querySelector("#status");
+      status.className = "status good";
+      status.textContent = `${items[0].label} added to ${items[0].category.label} → ${items[0].subcategory.label}.`;
+    });
     document.querySelector("#playgroundTemplate").addEventListener("change", (event) => {
       playground.templateId = event.target.value;
       playground.selections = {};
@@ -2024,6 +2490,13 @@
       state = blankState(); selection = null; templateSelection = null; expandedIds.clear(); playground = { templateId: null, seed: 1, selections: {}, overrides: {} }; render();
     });
     document.querySelector("#importButton").addEventListener("click", () => document.querySelector("#fileInput").click());
+    document.querySelector("#loadServerButton").addEventListener("click", loadLibraryFromComfyUI);
+    document.querySelector("#saveServerButton").addEventListener("click", () => saveLibraryToComfyUI());
+    document.querySelector("#serverAutosave").addEventListener("change", (event) => {
+      clearTimeout(serverSaveTimer);
+      if (event.target.checked) saveLibraryToComfyUI();
+      else setServerStatus("Auto-save off");
+    });
     document.querySelector("#importSectionsButton").addEventListener("click", () => {
       const dialog = document.querySelector("#sectionImportDialog");
       document.querySelector("#sectionImportText").value = "";
@@ -2045,11 +2518,7 @@
       if (!items.length) return;
       applyImport(items);
       document.querySelector("#sectionImportDialog").close();
-      activeView = items.some((item) => item.type === "template") && !items.some((item) => item.type === "preset") ? "templates" : "library";
-      document.querySelectorAll(".tabs button").forEach((button) => button.classList.toggle("active", button.dataset.view === activeView));
-      document.querySelector("#libraryView").hidden = activeView !== "library";
-      document.querySelector("#templatesView").hidden = activeView !== "templates";
-      document.querySelector("#playgroundView").hidden = activeView !== "playground";
+      showView(items.some((item) => item.type === "template") && !items.some((item) => item.type === "preset") ? "templates" : "library");
       render();
       const status = document.querySelector("#status");
       status.className = "status good";

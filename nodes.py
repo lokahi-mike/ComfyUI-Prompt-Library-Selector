@@ -1,8 +1,10 @@
 import json
 import re
+import shutil
 import unicodedata
 from pathlib import Path
 
+import yaml
 from aiohttp import web
 from server import PromptServer
 
@@ -24,16 +26,18 @@ from .prompt_library import (
 BUILTIN_LIBRARY_PATH = Path(__file__).with_name("prompt_library.yml")
 
 
-def preferred_library_path(user_directory=None):
+def user_library_path(user_directory=None):
     if user_directory is None and folder_paths is not None:
         user_directory = folder_paths.get_user_directory()
-    if user_directory:
-        user_path = (
-            Path(user_directory) / "prompt_library_selector" /
-            "prompt_library.yml"
-        )
-        if user_path.is_file():
-            return user_path
+    if not user_directory:
+        return None
+    return Path(user_directory) / "prompt_library_selector" / "prompt_library.yml"
+
+
+def preferred_library_path(user_directory=None):
+    user_path = user_library_path(user_directory)
+    if user_path and user_path.is_file():
+        return user_path
     return BUILTIN_LIBRARY_PATH
 
 
@@ -51,6 +55,34 @@ def active_library():
     if LIBRARY.path != desired_path:
         LIBRARY.path = desired_path
     return LIBRARY
+
+
+def save_user_library(text, user_directory=None):
+    """Validate and atomically save YAML without ever modifying the fallback."""
+    target = user_library_path(user_directory)
+    if target is None:
+        raise ValueError("ComfyUI did not provide a user directory")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("Library YAML cannot be empty")
+    data = yaml.safe_load(text)
+    if not isinstance(data, dict):
+        raise ValueError("prompt_library.yml must contain a YAML mapping")
+    if not isinstance(data.get("categories", {}), dict):
+        raise ValueError("'categories' must be a mapping")
+    if not isinstance(data.get("templates", {}), dict):
+        raise ValueError("'templates' must be a mapping")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    backup = target.with_name("prompt_library.backup.yml")
+    temporary = target.with_name(".prompt_library.yml.tmp")
+    try:
+        if target.is_file():
+            shutil.copy2(target, backup)
+        temporary.write_text(text, encoding="utf-8")
+        temporary.replace(target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target, backup if backup.is_file() else None
 
 
 def safe_filename_stem(
@@ -449,6 +481,41 @@ async def get_prompt_library(_request):
 @PromptServer.instance.routes.get("/prompt-library-selector/builder")
 async def get_prompt_library_builder(_request):
     return web.FileResponse(BUILDER)
+
+
+@PromptServer.instance.routes.get("/prompt-library-selector/library-source")
+async def get_prompt_library_source(_request):
+    library = active_library()
+    try:
+        return web.json_response({
+            "yaml": library.path.read_text(encoding="utf-8"),
+            "library_path": str(library.path),
+            "using_user_library": library.path != BUILTIN_LIBRARY_PATH,
+        })
+    except (OSError, UnicodeError) as error:
+        return web.json_response({"error": str(error)}, status=400)
+
+
+@PromptServer.instance.routes.put("/prompt-library-selector/library-source")
+async def put_prompt_library_source(request):
+    try:
+        if request.content_length and request.content_length > 10 * 1024 * 1024:
+            raise ValueError("Library YAML exceeds the 10 MB save limit")
+        payload = await request.json()
+        target, backup = save_user_library(payload.get("yaml"))
+        active_library()
+        notify = getattr(PromptServer.instance, "send_sync", None)
+        if notify:
+            notify("prompt-library-selector-updated", {
+                "library_path": str(target),
+            })
+        return web.json_response({
+            "saved": True,
+            "library_path": str(target),
+            "backup_path": str(backup) if backup else None,
+        })
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError) as error:
+        return web.json_response({"error": str(error)}, status=400)
 
 
 NODE_CLASS_MAPPINGS = {

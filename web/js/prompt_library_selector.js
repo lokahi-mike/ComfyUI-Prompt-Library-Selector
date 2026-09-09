@@ -9,6 +9,10 @@ const NONE_LABEL = "None";
 let globalLibraryRefreshTimer;
 let lastLibraryCatalog;
 
+api.addEventListener("prompt-library-selector-updated", () => {
+    scheduleEntireLibraryRefresh(0);
+});
+
 function activeGraph() {
     return app.canvas?.graph ?? app.rootGraph ?? app.graph;
 }

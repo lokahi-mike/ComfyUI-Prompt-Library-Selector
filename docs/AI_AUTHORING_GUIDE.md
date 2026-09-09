@@ -252,6 +252,41 @@ contradictions such as simultaneously describing an extremely narrow waist and
 a broad, straight torso. Prefer observable visual language over measurements
 unless exact measurements are important to the character design.
 
+### Private character parts
+
+The Workbench Character Builder can keep reusable authoring fragments in a
+separate browser-local collection. These parts are not prompt-library presets
+and never appear in ComfyUI dropdowns. Normally, an AI should return a finished
+character preset import packet. If the user explicitly requests reusable
+Character Builder parts, use this backup-compatible shape:
+
+```json
+{
+  "version": 1,
+  "parts": {
+    "identity": [],
+    "age": [],
+    "build": [
+      {
+        "key": "compact_grounded_build",
+        "label": "Compact Grounded Build",
+        "text": "She has a compact, naturally full build with grounded proportions."
+      }
+    ],
+    "proportions": [],
+    "anatomy": [],
+    "face": [],
+    "hair": [],
+    "features": [],
+    "consistency": []
+  }
+}
+```
+
+The allowed part types are exactly those keys. Each part requires a unique
+stable `key`, friendly `label`, and reusable `text`. Keep the text limited to
+that part's concern so it can combine cleanly with other parts.
+
 ## JSON safety rules
 
 - Return strict JSON: double quotes, no comments, and no trailing commas.
