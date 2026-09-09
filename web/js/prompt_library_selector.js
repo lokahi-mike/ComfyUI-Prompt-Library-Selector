@@ -36,13 +36,14 @@ function graphLink(graph, linkId) {
 function graphNode(graph, nodeId) {
     return graph?.getNodeById?.(nodeId)
         ?? graph?._nodes?.find((node) => String(node.id) === String(nodeId))
+        ?? graph?.nodes?.find((node) => String(node.id) === String(nodeId))
         ?? null;
 }
 
 function visitGraphNodes(graph, callback, visited = new Set()) {
     if (!graph || visited.has(graph)) return;
     visited.add(graph);
-    for (const node of graph._nodes ?? []) {
+    for (const node of graph._nodes ?? graph.nodes ?? []) {
         callback(node);
         if (node.subgraph) visitGraphNodes(node.subgraph, callback, visited);
     }
@@ -275,10 +276,23 @@ function promotedWidgetBindings(subgraphNode) {
             ?? subgraphNode.widgets?.find((widget) =>
                 widget.widgetId === hostInput.widgetId || widget.name === hostInput.name);
         if (!hostWidget) continue;
+        const linkedWidget = boundarySlot?._widget;
+        if (linkedWidget?.node && linkedWidget?.name) {
+            if (!bindingsByNode.has(linkedWidget.node)) {
+                bindingsByNode.set(linkedWidget.node, new Map());
+            }
+            bindingsByNode.get(linkedWidget.node).set(
+                linkedWidget.name, {hostInput, hostWidget},
+            );
+        }
         for (const linkId of boundarySlot.linkIds ?? []) {
             const link = graphLink(subgraph, linkId);
-            const target = link ? graphNode(subgraph, link.target_id) : null;
-            const targetInput = target?.inputs?.[link?.target_slot];
+            const resolution = link?.resolve?.(subgraph);
+            const target = resolution?.inputNode
+                ?? (link ? graphNode(subgraph, link.target_id) : null);
+            const targetInput = resolution?.input
+                ?? target?.inputs?.find((input) => input.link === linkId)
+                ?? target?.inputs?.[link?.target_slot];
             const targetWidget = target?.getWidgetFromSlot?.(targetInput);
             const widgetName = targetWidget?.name
                 ?? targetInput?.widget?.name
@@ -286,6 +300,24 @@ function promotedWidgetBindings(subgraphNode) {
             if (!target || !widgetName) continue;
             if (!bindingsByNode.has(target)) bindingsByNode.set(target, new Map());
             bindingsByNode.get(target).set(widgetName, {hostInput, hostWidget});
+        }
+
+        // Some frontend releases finish registering the host widget before the
+        // boundary link becomes resolvable. A promoted widget name is unique
+        // within a selector, so use that identity as a safe fallback.
+        const sourceName = hostInput?._subgraphSlot?._widget?.name
+            ?? hostInput?.widget?.name
+            ?? hostInput?.name;
+        if (sourceName) {
+            const candidates = (subgraph?._nodes ?? subgraph?.nodes ?? []).filter(
+                (node) => node.comfyClass === NODE_TYPE
+                    && node.widgets?.some((widget) => widget.name === sourceName),
+            );
+            if (candidates.length === 1) {
+                const target = candidates[0];
+                if (!bindingsByNode.has(target)) bindingsByNode.set(target, new Map());
+                bindingsByNode.get(target).set(sourceName, {hostInput, hostWidget});
+            }
         }
     }
     return bindingsByNode;
@@ -582,11 +614,11 @@ app.registerExtension({
 
         if (enabledAddenda) {
             const promotionButton = node.addWidget(
-                "button", "Show addenda state for subgraph promotion", null, () => {
+                "button", "Reveal JSON state to promote", null, () => {
                     addendaStateVisible = !addendaStateVisible;
                     promotionButton.label = addendaStateVisible
                         ? "Hide addenda state"
-                        : "Show addenda state for subgraph promotion";
+                        : "Reveal JSON state to promote";
                     node.setSize?.(node.computeSize?.() ?? node.size);
                     node.setDirtyCanvas(true, true);
                 },
@@ -674,10 +706,21 @@ function promotedWidgetValues(subgraphNode, inheritedOverrides) {
         const value = inheritedOverrides?.has(hostInput.name)
             ? inheritedOverrides.get(hostInput.name)
             : hostWidget?.value;
+        const linkedWidget = boundarySlot?._widget;
+        if (linkedWidget?.node && linkedWidget?.name) {
+            if (!valuesByNode.has(linkedWidget.node)) {
+                valuesByNode.set(linkedWidget.node, new Map());
+            }
+            valuesByNode.get(linkedWidget.node).set(linkedWidget.name, value);
+        }
         for (const linkId of boundarySlot.linkIds ?? []) {
             const link = graphLink(subgraph, linkId);
-            const target = link ? graphNode(subgraph, link.target_id) : null;
-            const targetInput = target?.inputs?.[link?.target_slot];
+            const resolution = link?.resolve?.(subgraph);
+            const target = resolution?.inputNode
+                ?? (link ? graphNode(subgraph, link.target_id) : null);
+            const targetInput = resolution?.input
+                ?? target?.inputs?.find((input) => input.link === linkId)
+                ?? target?.inputs?.[link?.target_slot];
             const targetWidget = target?.getWidgetFromSlot?.(targetInput);
             const widgetName = targetWidget?.name
                 ?? targetInput?.widget?.name
