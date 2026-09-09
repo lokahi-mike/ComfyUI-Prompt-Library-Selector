@@ -23,6 +23,8 @@ This project separates reusable content from workflow wiring:
 ```text
 prompt_library.yml
         ↓
+Prompt Library Controller (optional shared seed + refresh)
+        ↓
 Prompt Library Selectors (character, outfit, pose, lighting...)
         ↓
 Prompt Bundle
@@ -36,6 +38,14 @@ Change a dropdown instead of rewriting a prompt. Edit the library once instead
 of hunting through workflows.
 
 ## Highlights
+
+### Prompt Library Controller
+
+- Starts a Selector bundle chain with one shared deterministic seed
+- Makes every Random Selector in that chain use the same workflow seed
+- Outputs the same seed directly as `INT` and readable `Seed: …` text
+- Provides **New random seed** and **Refresh entire library** buttons
+- Remains optional; Selector-only workflows continue to use local seeds
 
 ### Prompt Library Selector
 
@@ -60,6 +70,9 @@ The Random seed is always a non-negative integer. To reroll a Random preset,
 change or increment the seed; the Selector intentionally does not use
 ComfyUI's after-generation `randomize` mode because promoted subgraph widgets
 can confuse that mode string with the numeric seed value.
+
+When a Controller bundle is connected upstream, its shared seed takes priority
+and the Selector's **Local random seed (no Controller)** value is ignored.
 
 When a category defines `addenda_slots`, the Selector creates one stable
 **Add:** toggle for each slot. Presets fill those slots with their own optional
@@ -132,7 +145,7 @@ python -m pip install -r requirements.txt
 
 Restart ComfyUI and hard-refresh the browser after Python or frontend updates.
 YAML-only changes do not require a restart—use **Refresh entire library** on
-the Composer.
+the Controller or Composer.
 
 ### Library file location
 
@@ -182,7 +195,17 @@ and preserves the previous user file as `prompt_library.backup.yml`.
 offline editing. Directly opening the HTML file does not grant filesystem write
 access, so server load/save controls require the ComfyUI-hosted address.
 
-### 2. Add selector nodes
+### 2. Add an optional Controller
+
+Add **Prompt Library Controller** when you want one seed for Random library
+choices and image generation. Connect its `bundle` output to the first
+Selector's `bundle_in`. Its `seed` output can feed a sampler directly, or you
+can use the identical seed emitted later by the Composer.
+
+Skip the Controller for a simple workflow; every Selector will continue using
+its own local seed.
+
+### 3. Add selector nodes
 
 Add one Prompt Library Selector for every independently swappable component:
 
@@ -192,13 +215,14 @@ Character → Wardrobe → Pose → Location → Lighting → Photography
 
 Choose a category, subcategory, and preset on each node.
 
-### 3. Chain the bundles
+### 4. Chain the bundles
 
 Connect the first selector's `bundle` output to the next selector's `bundle_in`.
 Continue until the complete chain reaches the Template Composer:
 
 ```text
-Character bundle → Wardrobe bundle_in
+Controller bundle → Character bundle_in  (optional)
+Character bundle  → Wardrobe bundle_in
 Wardrobe bundle  → Pose bundle_in
 Pose bundle      → Lighting bundle_in
 Lighting bundle  → Template Composer bundle_in
@@ -206,12 +230,17 @@ Lighting bundle  → Template Composer bundle_in
 
 You can reorder or omit selectors. Empty selections are ignored.
 
-### 4. Choose a template
+### 5. Choose a template
 
 On Prompt Library Template Composer, choose the template category,
 subcategory, and template. Its `positive_prompt` output can feed your positive
 text encoder, while `negative_prompt` provides the combined negative text for
-workflows that use it. Both outputs remain visible in live previews.
+workflows that use it. Both outputs remain visible in live previews. When the
+chain begins at a Controller, the Composer's `shared_seed` output can feed the
+Krea or sampler seed input and `seed_text` can feed an overlay, filename, or
+metadata node. Without a Controller, `shared_seed` is `0` and `seed_text` is
+empty so the Composer does not imply that unrelated local Selector seeds were
+shared.
 
 The live **Template requires** panel shows whether each variable is connected,
 which library source it expects, and which preset currently fills it.
@@ -277,6 +306,17 @@ contain `{{subject}}`, which uses that variable's alias.
 Choose **Random** on any preset selector to resolve a real preset at execution
 time. The result is deterministic for the same seed, making experiments
 repeatable. Change or increment the seed to reroll.
+
+For a coordinated workflow, start the chain with a Prompt Library Controller.
+All Random Selectors use its seed but still resolve independently: the category,
+subcategory, and template variable are mixed into each choice. Reusing the seed
+therefore reproduces the combination without forcing every Random dropdown to
+choose the same list position. Two otherwise identical Random Selectors with
+the same template variable may resolve identically; assign explicit variables
+such as `character_a` and `character_b` when you want distinct deterministic
+random streams. The seed controls selection only; send the
+Composer's `shared_seed` output to the generation node when you also want it to
+control image sampling.
 
 The selector's `resolved_preset_name` STRING output returns the friendly label
 of the concrete selection—even when Random was used. Connect it to a text
@@ -547,8 +587,8 @@ The Workbench creates and maintains these mappings without raw YAML editing.
 ## Refresh and reload behavior
 
 - After editing only `prompt_library.yml`, click **Refresh entire library** on
-  any Composer. One fetch updates every Selector and Composer in the workflow,
-  including nodes nested inside subgraphs.
+  a Controller or Composer. One fetch updates every Selector and Composer in
+  the workflow, including nodes nested inside subgraphs.
 - The YAML is read again during execution, so queued prompts use current text.
 - After changing or updating Python or JavaScript files, restart ComfyUI and
   hard-refresh the browser.

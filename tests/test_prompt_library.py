@@ -235,6 +235,17 @@ class PromptLibraryTests(unittest.TestCase):
         self.assertEqual(negative, "distorted face")
         self.assertEqual(tags, "subject, adult, fashion")
 
+    def test_bundle_operations_preserve_shared_seed(self):
+        bundle = append_bundle({"segments": [], "shared_seed": 73}, {
+            "variable": "character_a", "positive": "Alpha", "negative": "",
+            "tags": [],
+        })
+        self.assertEqual(bundle["shared_seed"], 73)
+        mapped = map_bundle_to_template(
+            bundle, {"character_a": "character"}, {}, {},
+        )
+        self.assertEqual(mapped["shared_seed"], 73)
+
     def test_repeated_sources_map_to_template_variables_in_bundle_order(self):
         bundle = {"segments": [
             {"variable": "character", "source": "character", "raw_positive": "{{subject}} is Rhiannon.", "positive": "{{subject}} is Rhiannon."},

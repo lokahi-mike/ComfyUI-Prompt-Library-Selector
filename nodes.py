@@ -19,6 +19,7 @@ from .prompt_library import (
     append_bundle,
     apply_alias,
     assemble_template,
+    bundle_seed,
     compose_fragments,
     deduplicate,
     map_bundle_to_template,
@@ -143,6 +144,30 @@ def make_prompt_packet(
         sections.append(f"[{heading}]\n{value}")
     return "\n\n".join(sections)
 
+class PromptLibraryController:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "seed": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF},
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("PROMPT_BUNDLE", "INT", "STRING")
+    RETURN_NAMES = ("bundle", "shared_seed", "seed_text")
+    FUNCTION = "create_context"
+    CATEGORY = "prompt/library"
+    DESCRIPTION = "Start a prompt chain with one shared selection and render seed."
+
+    def create_context(self, seed=0):
+        resolved_seed = max(0, int(seed))
+        return ({"segments": [], "shared_seed": resolved_seed}, resolved_seed,
+                f"Seed: {resolved_seed}")
+
+
 class PromptLibrarySelector:
     @classmethod
     def INPUT_TYPES(cls):
@@ -249,8 +274,10 @@ class PromptLibrarySelector:
         resolved_names_in="",
         name_separator=", ",
     ):
+        shared_seed = bundle_seed(bundle_in)
+        effective_seed = shared_seed if shared_seed is not None else seed
         entry = active_library().resolve_entry(
-            category, subcategory, preset, seed, template_variable
+            category, subcategory, preset, effective_seed, template_variable
         )
         switches = (
             addendum_1, addendum_2, addendum_3, addendum_4,
@@ -387,8 +414,8 @@ class PromptLibraryTemplateComposer:
             "optional": {"bundle_in": ("PROMPT_BUNDLE", {"forceInput": True})},
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("positive_prompt", "negative_prompt")
+    RETURN_TYPES = ("STRING", "STRING", "INT", "STRING")
+    RETURN_NAMES = ("positive_prompt", "negative_prompt", "shared_seed", "seed_text")
     FUNCTION = "compose_template"
     CATEGORY = "prompt/library"
     DESCRIPTION = "Assemble a Prompt Bundle with a YAML natural-language template."
@@ -409,12 +436,18 @@ class PromptLibraryTemplateComposer:
         positive, negative, _tags = assemble_template(
             template_text, mapped_bundle, pre_text, post_text
         )
+        shared_seed = bundle_seed(bundle_in)
         return {
             "ui": {
                 "preview": [positive],
                 "negative_preview": [negative],
             },
-            "result": (positive, negative),
+            "result": (
+                positive,
+                negative,
+                shared_seed if shared_seed is not None else 0,
+                f"Seed: {shared_seed}" if shared_seed is not None else "",
+            ),
         }
 
     @classmethod
@@ -565,12 +598,14 @@ async def put_prompt_library_source(request):
 
 
 NODE_CLASS_MAPPINGS = {
+    "PromptLibraryController": PromptLibraryController,
     "PromptLibrarySelector": PromptLibrarySelector,
     "PromptLibraryTemplateComposer": PromptLibraryTemplateComposer,
     "PromptLibraryFilenameBuilder": PromptLibraryFilenameBuilder,
     "PromptLibraryPromptPacket": PromptLibraryPromptPacket,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "PromptLibraryController": "Prompt Library Controller",
     "PromptLibrarySelector": "Prompt Library Selector",
     "PromptLibraryTemplateComposer": "Prompt Library Template Composer",
     "PromptLibraryFilenameBuilder": "Prompt Library Filename Builder",

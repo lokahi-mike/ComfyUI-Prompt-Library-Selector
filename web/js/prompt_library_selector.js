@@ -2,6 +2,7 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const NODE_TYPE = "PromptLibrarySelector";
+const CONTROLLER_NODE_TYPE = "PromptLibraryController";
 const TEMPLATE_COMPOSER_NODE_TYPE = "PromptLibraryTemplateComposer";
 const NONE_KEY = "__none__";
 const RANDOM_KEY = "__random__";
@@ -180,7 +181,39 @@ function setWidgetHidden(node, widget, hidden) {
     return changed;
 }
 
-function selectedLibraryEntry(node, overrides) {
+function setupLibraryController(node) {
+    if (node._promptLibraryControllerReady) return;
+    node._promptLibraryControllerReady = true;
+    const seed = node.widgets?.find((widget) => widget.name === "seed");
+    const refreshSeedConsumers = () => {
+        visitGraphNodes(rootGraph(node), (candidate) => {
+            candidate._updatePromptLibraryResolvedSelection?.();
+        });
+        refreshComposerPreviews();
+    };
+    if (seed) {
+        seed.label = "Shared selection + render seed";
+        normalizeSeedWidget(seed);
+        const originalCallback = seed.callback;
+        seed.callback = function () {
+            originalCallback?.apply(this, arguments);
+            refreshSeedConsumers();
+        };
+    }
+    node.addWidget("button", "New random seed", null, () => {
+        if (!seed) return;
+        const values = new Uint32Array(1);
+        crypto.getRandomValues(values);
+        seed.value = values[0];
+        seed.callback?.(seed.value, app.canvas, node);
+        node.setDirtyCanvas?.(true, true);
+    });
+    node.addWidget("button", "Refresh entire library", null, () => {
+        refreshEntireLibrary(rootGraph(node)).catch(() => {});
+    });
+}
+
+function selectedLibraryEntry(node, overrides, overrideContext) {
     const enabled = widgetValue(node, "enabled", overrides) !== false;
     const categoryKey = widgetValue(node, "category", overrides);
     const subcategoryKey = widgetValue(node, "subcategory", overrides);
@@ -193,7 +226,9 @@ function selectedLibraryEntry(node, overrides) {
     );
     const candidates = subcategory?.presets ?? [];
     const variable = String(widgetValue(node, "template_variable", overrides) ?? "").trim();
-    const seed = widgetValue(node, "seed", overrides) ?? 0;
+    const seed = sharedSeedForSelector(node, overrideContext)
+        ?? widgetValue(node, "seed", overrides)
+        ?? 0;
     const preset = presetKey === RANDOM_KEY
         ? candidates[stableChoice(seed, [variable, categoryKey, subcategoryKey], candidates.length)]
         : candidates.find((item) => item.key === presetKey);
@@ -406,7 +441,12 @@ app.registerExtension({
     name: "prompt-library-selector.cascading-selectors",
 
     loadedGraphNode(node) {
-        if (![NODE_TYPE, TEMPLATE_COMPOSER_NODE_TYPE].includes(node.comfyClass)) return;
+        if (![CONTROLLER_NODE_TYPE, NODE_TYPE, TEMPLATE_COMPOSER_NODE_TYPE].includes(node.comfyClass)) return;
+        if (node.comfyClass === CONTROLLER_NODE_TYPE) {
+            setupLibraryController(node);
+            scheduleEntireLibraryRefresh();
+            return;
+        }
         if (node.comfyClass === NODE_TYPE) {
             normalizeSeedWidget(
                 node.widgets?.find((widget) => widget.name === "seed"),
@@ -424,6 +464,10 @@ app.registerExtension({
     },
 
     async nodeCreated(node) {
+        if (node.comfyClass === CONTROLLER_NODE_TYPE) {
+            setupLibraryController(node);
+            return;
+        }
         if (node.comfyClass === TEMPLATE_COMPOSER_NODE_TYPE) {
             await setupTemplateComposer(node);
             return;
@@ -452,7 +496,7 @@ app.registerExtension({
             );
             const candidates = selectedSubcategory?.presets ?? [];
             const variable = String(widgetValue(node, "template_variable") ?? "").trim();
-            const seed = widgetValue(node, "seed") ?? 0;
+            const seed = sharedSeedForSelector(node) ?? widgetValue(node, "seed") ?? 0;
             const selectedPreset = preset.value === RANDOM_KEY
                 ? candidates[stableChoice(seed, [variable, category.value, subcategory.value], candidates.length)]
                 : candidates.find((item) => item.key === preset.value);
@@ -521,7 +565,7 @@ app.registerExtension({
             ["prompt_override", "Positive override"],
             ["negative_override", "Negative override"],
             ["name_separator", "Resolved-name separator"],
-            ["seed", "Random seed"],
+            ["seed", "Local random seed (no Controller)"],
         ]) {
             const widget = node.widgets?.find((item) => item.name === name);
             if (!widget) continue;
@@ -559,6 +603,11 @@ app.registerExtension({
             "text", "Resolved preset", NONE_LABEL, null, {serialize: false},
         );
         resolvedWidget.disabled = true;
+        node._updatePromptLibraryResolvedSelection = () => {
+            updateAddenda();
+            resolvedWidget.value = selectedLibraryEntry(node).label;
+            node.setDirtyCanvas?.(true, true);
+        };
         const originalExecuted = node.onExecuted;
         node.onExecuted = function (message) {
             originalExecuted?.apply(this, arguments);
@@ -655,6 +704,59 @@ function markBundleNodeVisited(visited, node, overrideContext) {
     return false;
 }
 
+function sharedSeedFromSource(node, outputSlot, visited = new Map(), overrideContext) {
+    if (!node) return null;
+    if (node.comfyClass === CONTROLLER_NODE_TYPE) {
+        const value = Number(widgetValue(node, "seed", overrideContext?.get(node)));
+        return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+    }
+    if (markBundleNodeVisited(visited, node, overrideContext)) return null;
+    if (node.comfyClass === NODE_TYPE) {
+        return sharedSeedForSelector(node, overrideContext, visited);
+    }
+    if (!node.subgraph) return null;
+    const boundarySlot = node.subgraph.outputNode?.slots?.[outputSlot];
+    const internalLinkId = boundarySlot?.linkIds?.[0];
+    const internalLink = internalLinkId != null
+        ? graphLink(node.subgraph, internalLinkId)
+        : null;
+    const internalSource = internalLink
+        ? graphNode(node.subgraph, internalLink.origin_id)
+        : null;
+    const nestedContext = promotedWidgetValues(node, overrideContext?.get(node));
+    nestedContext.hostNode = node;
+    nestedContext.parentContext = overrideContext;
+    return sharedSeedFromSource(
+        internalSource, internalLink?.origin_slot, visited, nestedContext,
+    );
+}
+
+function sharedSeedForSelector(node, overrideContext, visited = new Map()) {
+    const graph = node?.graph ?? activeGraph();
+    const bundleInput = node?.inputs?.find((input) => input.name === "bundle_in");
+    if (bundleInput?.link == null) return null;
+    const link = graphLink(graph, bundleInput.link);
+    if (!link) return null;
+    if (String(link.origin_id) === String(graph.inputNode?.id)) {
+        const hostNode = overrideContext?.hostNode;
+        const hostInput = hostNode?.inputs?.[link.origin_slot];
+        const parentGraph = hostNode?.graph;
+        const parentLink = hostInput?.link != null
+            ? graphLink(parentGraph, hostInput.link)
+            : null;
+        const parentSource = parentLink
+            ? graphNode(parentGraph, parentLink.origin_id)
+            : null;
+        return sharedSeedFromSource(
+            parentSource, parentLink?.origin_slot, visited,
+            overrideContext?.parentContext,
+        );
+    }
+    return sharedSeedFromSource(
+        graphNode(graph, link.origin_id), link.origin_slot, visited, overrideContext,
+    );
+}
+
 function bundleSegmentsFromSource(node, outputSlot, visited = new Map(), overrideContext) {
     if (!node) return [];
     if (node.comfyClass === NODE_TYPE) {
@@ -709,7 +811,9 @@ function bundleSegmentsFromSelector(node, visited = new Map(), overrideContext) 
             ));
         }
     }
-    const segment = selectedLibraryEntry(node, overrideContext?.get(node));
+    const segment = selectedLibraryEntry(
+        node, overrideContext?.get(node), overrideContext,
+    );
     if (segment.positive || segment.negative || segment.tags?.length) segments.push(segment);
     return segments;
 }

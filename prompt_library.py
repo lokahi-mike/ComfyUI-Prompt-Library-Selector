@@ -39,8 +39,22 @@ def deduplicate(values: Iterable[Any]) -> list[str]:
     return result
 
 
-def make_bundle(segments: Iterable[dict[str, Any]] = ()) -> dict[str, Any]:
-    return {"segments": [dict(segment) for segment in segments if segment]}
+def make_bundle(
+    segments: Iterable[dict[str, Any]] = (), shared_seed: int | None = None
+) -> dict[str, Any]:
+    bundle = {"segments": [dict(segment) for segment in segments if segment]}
+    if shared_seed is not None:
+        bundle["shared_seed"] = max(0, int(shared_seed))
+    return bundle
+
+
+def bundle_seed(bundle: Any) -> int | None:
+    if not isinstance(bundle, dict) or "shared_seed" not in bundle:
+        return None
+    try:
+        return max(0, int(bundle["shared_seed"]))
+    except (TypeError, ValueError):
+        return None
 
 
 def append_bundle(bundle: Any, segment: dict[str, Any] | None) -> dict[str, Any]:
@@ -48,7 +62,7 @@ def append_bundle(bundle: Any, segment: dict[str, Any] | None) -> dict[str, Any]
     segments = [dict(item) for item in existing if isinstance(item, dict)]
     if segment and (segment.get("positive") or segment.get("negative") or segment.get("tags")):
         segments.append(dict(segment))
-    return make_bundle(segments)
+    return make_bundle(segments, bundle_seed(bundle))
 
 
 def bundle_strings(bundle: Any, separator: str = "\n\n") -> tuple[str, str, str]:
@@ -112,7 +126,7 @@ def map_bundle_to_template(
             "defaulted": True,
             "label": "Template default",
         })
-    return make_bundle(result)
+    return make_bundle(result, bundle_seed(bundle))
 
 
 def assemble_template(template_text: str, bundle: Any, pre_text: str = "", post_text: str = "") -> tuple[str, str, str]:

@@ -154,6 +154,52 @@ class NodeIntegrationTests(unittest.TestCase):
         self.assertEqual(seed_options["default"], 0)
         self.assertNotIn("control_after_generate", seed_options)
 
+    def test_controller_starts_bundle_with_shared_seed(self):
+        result = self.nodes.PromptLibraryController().create_context(8675309)
+        self.assertEqual(result[0], {"segments": [], "shared_seed": 8675309})
+        self.assertEqual(result[1], 8675309)
+        self.assertEqual(result[2], "Seed: 8675309")
+
+    def test_selectors_inherit_controller_seed_through_bundle(self):
+        selector = self.nodes.PromptLibrarySelector()
+        controller_bundle = self.nodes.PromptLibraryController().create_context(42)[0]
+        first = selector.select_prompt(
+            "characters", "people", "__random__",
+            seed=999, bundle_in=controller_bundle,
+        )["result"]
+        second = selector.select_prompt(
+            "characters", "people", "__random__",
+            seed=123, bundle_in=first[3], template_variable="character_b",
+        )["result"]
+        expected_first = selector.select_prompt(
+            "characters", "people", "__random__", seed=42,
+        )["result"][0]
+        expected_second = selector.select_prompt(
+            "characters", "people", "__random__",
+            seed=42, template_variable="character_b",
+        )["result"][0]
+        self.assertEqual(first[0], expected_first)
+        self.assertEqual(second[0], expected_second)
+        self.assertEqual(second[3]["shared_seed"], 42)
+
+    def test_composer_outputs_shared_seed_for_generation_and_text(self):
+        controller_bundle = self.nodes.PromptLibraryController().create_context(31415)[0]
+        bundle = self.nodes.PromptLibrarySelector().select_prompt(
+            "characters", "people", "alpha", bundle_in=controller_bundle,
+        )["result"][3]
+        result = self.nodes.PromptLibraryTemplateComposer().compose_template(
+            "dual", "editorial", "pair", bundle_in=bundle,
+        )["result"]
+        self.assertEqual(result[2], 31415)
+        self.assertEqual(result[3], "Seed: 31415")
+
+    def test_composer_leaves_seed_text_empty_without_controller(self):
+        result = self.nodes.PromptLibraryTemplateComposer().compose_template(
+            "dual", "editorial", "pair", bundle_in=None,
+        )["result"]
+        self.assertEqual(result[2], 0)
+        self.assertEqual(result[3], "")
+
     def test_selector_applies_enabled_addenda_to_all_outputs(self):
         response = self.nodes.PromptLibrarySelector().select_prompt(
             "characters", "people", "alpha", alias="Character A",
@@ -206,7 +252,7 @@ class NodeIntegrationTests(unittest.TestCase):
         response = self.nodes.PromptLibraryTemplateComposer().compose_template(
             "dual", "editorial", "pair", bundle_in=second
         )
-        positive, negative = response["result"]
+        positive, negative = response["result"][:2]
         self.assertEqual(positive, "Character A is Alpha.\n\nCharacter B is Beta.")
         self.assertEqual(negative, "duplicate face, duplicate person")
 
