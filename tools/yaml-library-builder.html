@@ -168,7 +168,8 @@
     textarea { resize: vertical; min-height: 8rem; line-height: 1.45; }
     #yamlOutput { flex: 1; min-height: 28rem; resize: none; border: 0; border-radius: 0; padding: 1rem; font: 12.5px/1.55 "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
     .hint { color: var(--muted); font-size: .76rem; line-height: 1.45; }
-    .editor-footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: .2rem; }
+    .editor-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-top: .2rem; }
+    .editor-actions { display: flex; flex-wrap: wrap; gap: .45rem; justify-content: flex-end; }
     .key-actions { display: flex; align-items: center; justify-content: space-between; gap: .55rem; }
     .key-status.bad { color: #ffb8bc; }
     .guidance { border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem; display: grid; gap: .38rem; font-size: .78rem; line-height: 1.4; }
@@ -438,6 +439,20 @@
       <div class="dialog-actions">
         <div><button id="sectionImportExample" class="ghost">Insert example</button><button id="sectionImportPreviewButton">Preview</button></div>
         <div><button id="sectionImportCancel" class="ghost">Cancel</button><button id="sectionImportApply" class="primary" disabled>Import valid items</button></div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="movePresetDialog">
+    <div class="panel-head"><h2>Move preset</h2><span class="privacy">Prompt content and addenda are preserved</span></div>
+    <div class="dialog-body">
+      <p id="movePresetName" class="hint"></p>
+      <label>Destination category<select id="movePresetCategory"></select></label>
+      <label>Destination subcategory<select id="movePresetSubcategory"></select></label>
+      <div id="movePresetNotice" class="import-preview">Choose a destination.</div>
+      <div class="dialog-actions">
+        <div></div>
+        <div><button id="movePresetCancel" class="ghost">Cancel</button><button id="movePresetApply" class="primary">Move preset</button></div>
       </div>
     </div>
   </dialog>
@@ -1123,11 +1138,30 @@
       const footer = document.createElement("div");
       footer.className = "editor-footer";
       footer.innerHTML = '<span class="hint">Changes update the YAML immediately.</span>';
+      const actions = document.createElement("div");
+      actions.className = "editor-actions";
+      if (selection.type === "preset") {
+        const clone = document.createElement("button");
+        clone.type = "button";
+        clone.textContent = "Clone preset";
+        clone.addEventListener("click", cloneSelectedPreset);
+        const move = document.createElement("button");
+        move.type = "button";
+        move.textContent = "Move preset";
+        move.addEventListener("click", openMovePresetDialog);
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.className = "ghost";
+        copy.textContent = "Copy import JSON";
+        copy.addEventListener("click", copySelectedPresetJson);
+        actions.append(clone, move, copy);
+      }
       const remove = document.createElement("button");
       remove.className = "danger";
       remove.textContent = `Delete ${selection.type}`;
       remove.addEventListener("click", deleteSelected);
-      footer.append(remove);
+      actions.append(remove);
+      footer.append(actions);
       form.append(footer);
       editor.append(form);
     }
@@ -2158,6 +2192,167 @@
       }
     }
 
+    function uniquePresetKey(subcategory, requestedKey, ignoredId = null) {
+      const base = slugify(requestedKey) || "preset";
+      const used = new Set(subcategory.presets.filter((item) => item.id !== ignoredId).map((item) => item.key));
+      if (!used.has(base)) return base;
+      let suffix = 2;
+      while (used.has(`${base}_${suffix}`)) suffix += 1;
+      return `${base}_${suffix}`;
+    }
+
+    function addendumHasContent(addendum) {
+      return Boolean(
+        addendum.prompt?.trim()
+        || addendum.negativePrompt?.trim()
+        || addendum.tags?.length
+        || addendum.defaultEnabled
+      );
+    }
+
+    function cloneSelectedPreset() {
+      const found = findSelected();
+      if (!found?.preset || !found.subcategory) return;
+      const copy = structuredClone(found.preset);
+      copy.id = makeId();
+      copy.label = `${found.preset.label} Copy`;
+      copy.key = uniquePresetKey(found.subcategory, `${found.preset.key}_copy`);
+      copy.autoKey = false;
+      copy.addenda = copy.addenda.map((item) => ({...item, id: makeId(), autoKey: false}));
+      found.subcategory.presets.push(copy);
+      expandedIds.add(found.category.id);
+      expandedIds.add(found.subcategory.id);
+      selection = {type: "preset", id: copy.id};
+      render();
+      const status = document.querySelector("#status");
+      status.className = "status good";
+      status.textContent = `Cloned as “${copy.label}”. Its stable key is “${copy.key}”.`;
+    }
+
+    function presetImportPacket(found) {
+      const addenda = {};
+      for (const item of found.preset.addenda.filter(addendumHasContent)) {
+        const slot = found.category.addendaSlots.find((candidate) => candidate.key === item.key);
+        addenda[item.key] = {
+          label: slot?.label || item.label || item.key.replaceAll("_", " "),
+          ...(item.prompt.trim() ? {prompt: item.prompt} : {}),
+          ...(item.negativePrompt.trim() ? {negative_prompt: item.negativePrompt} : {}),
+          ...(item.tags.length ? {tags: item.tags} : {}),
+          ...(item.defaultEnabled ? {default_enabled: true} : {}),
+        };
+      }
+      return {
+        items: [{
+          type: "preset",
+          category: {
+            key: found.category.key, label: found.category.label,
+            ...(found.category.templateSlot.trim() ? {template_slot: found.category.templateSlot.trim()} : {}),
+            ...(found.category.tags.length ? {tags: found.category.tags} : {}),
+          },
+          subcategory: {
+            key: found.subcategory.key, label: found.subcategory.label,
+            ...(found.subcategory.tags.length ? {tags: found.subcategory.tags} : {}),
+          },
+          key: found.preset.key,
+          label: found.preset.label,
+          prompt: found.preset.prompt,
+          ...(found.preset.negativePrompt.trim() ? {negative_prompt: found.preset.negativePrompt} : {}),
+          ...(found.preset.templateSlot.trim() ? {template_slot: found.preset.templateSlot.trim()} : {}),
+          ...(found.preset.tags.length ? {tags: found.preset.tags} : {}),
+          ...(Object.keys(addenda).length ? {addenda} : {}),
+        }],
+      };
+    }
+
+    async function copySelectedPresetJson() {
+      const found = findSelected();
+      if (!found?.preset) return;
+      await navigator.clipboard.writeText(JSON.stringify(presetImportPacket(found), null, 2));
+      const status = document.querySelector("#status");
+      status.className = "status good";
+      status.textContent = `Copied “${found.preset.label}” as importable JSON.`;
+    }
+
+    function movePresetDestination() {
+      const categoryId = document.querySelector("#movePresetCategory").value;
+      const subcategoryId = document.querySelector("#movePresetSubcategory").value;
+      const category = state.categories.find((item) => item.id === categoryId);
+      const subcategory = category?.subcategories.find((item) => item.id === subcategoryId);
+      return {category, subcategory};
+    }
+
+    function updateMovePresetDialog() {
+      const dialog = document.querySelector("#movePresetDialog");
+      const found = findSelected();
+      if (!dialog.open || !found?.preset) return;
+      const categorySelect = document.querySelector("#movePresetCategory");
+      const subcategorySelect = document.querySelector("#movePresetSubcategory");
+      const category = state.categories.find((item) => item.id === categorySelect.value);
+      const previousSubcategory = subcategorySelect.value;
+      subcategorySelect.replaceChildren(...(category?.subcategories ?? []).map((item) => new Option(item.label, item.id)));
+      if (category?.subcategories.some((item) => item.id === previousSubcategory)) subcategorySelect.value = previousSubcategory;
+      const destination = movePresetDestination();
+      const meaningful = found.preset.addenda.filter(addendumHasContent);
+      const destinationKeys = new Set(destination.category?.addendaSlots.map((item) => item.key) ?? []);
+      const missing = meaningful.filter((item) => !destinationKeys.has(item.key));
+      const finalControlCount = destinationKeys.size + new Set(missing.map((item) => item.key)).size;
+      const samePlace = destination.category?.id === found.category.id && destination.subcategory?.id === found.subcategory.id;
+      const collision = destination.subcategory?.presets.some((item) => item.id !== found.preset.id && item.key === found.preset.key);
+      const blocked = !destination.subcategory || finalControlCount > 8 || samePlace;
+      const notice = document.querySelector("#movePresetNotice");
+      notice.className = `import-preview ${blocked ? "bad" : "good"}`;
+      if (!destination.subcategory) notice.textContent = "This category has no subcategory. Create one before moving the preset.";
+      else if (samePlace) notice.textContent = "Choose a different subcategory.";
+      else if (finalControlCount > 8) notice.textContent = `Move blocked: the destination would need ${finalControlCount} addendum controls, exceeding the limit of 8.`;
+      else {
+        const notes = [];
+        if (missing.length) notes.push(`${missing.length} missing addendum control${missing.length === 1 ? "" : "s"} will be added to the destination category.`);
+        if (collision) notes.push(`The stable key will become “${uniquePresetKey(destination.subcategory, found.preset.key, found.preset.id)}” to avoid a duplicate.`);
+        notice.textContent = notes.join(" ") || "Ready to move. The stable key and all prompt content will be preserved.";
+      }
+      document.querySelector("#movePresetApply").disabled = blocked;
+    }
+
+    function openMovePresetDialog() {
+      const found = findSelected();
+      if (!found?.preset) return;
+      const categorySelect = document.querySelector("#movePresetCategory");
+      categorySelect.replaceChildren(...state.categories.map((item) => new Option(item.label, item.id)));
+      categorySelect.value = found.category.id;
+      document.querySelector("#movePresetName").textContent = `Move “${found.preset.label}” to another subcategory.`;
+      document.querySelector("#movePresetDialog").showModal();
+      updateMovePresetDialog();
+      document.querySelector("#movePresetSubcategory").value = found.subcategory.id;
+      updateMovePresetDialog();
+    }
+
+    function applyPresetMove() {
+      const found = findSelected();
+      const destination = movePresetDestination();
+      if (!found?.preset || !destination.category || !destination.subcategory) return;
+      const meaningful = found.preset.addenda.filter(addendumHasContent);
+      const destinationKeys = new Set(destination.category.addendaSlots.map((item) => item.key));
+      const missing = meaningful.filter((item) => !destinationKeys.has(item.key));
+      if (destinationKeys.size + new Set(missing.map((item) => item.key)).size > 8) return;
+      for (const item of missing) {
+        if (destinationKeys.has(item.key)) continue;
+        const sourceSlot = found.category.addendaSlots.find((slot) => slot.key === item.key);
+        destination.category.addendaSlots.push(newAddendaSlot(sourceSlot?.label || item.label || item.key.replaceAll("_", " "), item.key));
+        destinationKeys.add(item.key);
+      }
+      found.subcategory.presets = found.subcategory.presets.filter((item) => item.id !== found.preset.id);
+      found.preset.key = uniquePresetKey(destination.subcategory, found.preset.key, found.preset.id);
+      found.preset.addenda = meaningful.filter((item) => destinationKeys.has(item.key));
+      destination.subcategory.presets.push(found.preset);
+      expandedIds.add(destination.category.id);
+      expandedIds.add(destination.subcategory.id);
+      document.querySelector("#movePresetDialog").close();
+      render();
+      const status = document.querySelector("#status");
+      status.className = "status good";
+      status.textContent = `Moved “${found.preset.label}” to ${destination.category.label} → ${destination.subcategory.label}.`;
+    }
+
     function addCategory() {
       const item = newCategory();
       state.categories.push(item);
@@ -2893,6 +3088,10 @@
       document.querySelector("#sectionImportApply").disabled = true;
       dialog.showModal();
     });
+    document.querySelector("#movePresetCategory").addEventListener("change", updateMovePresetDialog);
+    document.querySelector("#movePresetSubcategory").addEventListener("change", updateMovePresetDialog);
+    document.querySelector("#movePresetCancel").addEventListener("click", () => document.querySelector("#movePresetDialog").close());
+    document.querySelector("#movePresetApply").addEventListener("click", applyPresetMove);
     document.querySelector("#sectionImportExample").addEventListener("click", () => {
       document.querySelector("#sectionImportText").value = JSON.stringify(IMPORT_EXAMPLE, null, 2);
       previewSectionImport();

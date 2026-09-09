@@ -90,6 +90,9 @@ Random preset uses the same category controls for its resolved choice.
 - Dedicated Character Builder with live atomic-preset assembly
 - Private reusable character-parts collection kept out of runtime dropdowns
 - Collapsible category and subcategory trees with remembered UI state
+- Clone presets with automatically collision-safe stable keys
+- Move presets between subcategories without losing prompts or addenda
+- Copy any preset as importable JSON for transfer between libraries
 - Automatic snake-case stable keys with duplicate-key validation
 - Live generated YAML with internal round-trip validation
 - Prompt Playground for testing complete assembled prompts offline
@@ -441,6 +444,15 @@ The importer accepts one preset or template object, an array of objects, or an
 object containing an `items` array. Missing categories and subcategories are
 created automatically. Existing item keys in the same destination are skipped
 instead of overwritten. Click **Insert example** for a complete packet.
+
+Each preset editor also provides **Clone preset**, **Move preset**, and
+**Copy import JSON**. Cloning creates an independent copy beside the original
+with a unique stable key. Moving preserves the key unless it would collide in
+the destination subcategory. When moving across categories, required addendum
+controls are carried into the destination category when they fit within the
+eight-control limit; otherwise the Workbench blocks the move instead of
+discarding content. Copied JSON can be pasted into **Import sections** in the
+same or another library.
 
 For future requests, ask an assistant:
 
