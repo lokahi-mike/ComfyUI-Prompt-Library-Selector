@@ -69,7 +69,7 @@ can confuse that mode string with the numeric seed value.
 - Editable workflow-local template override
 - Optional pre-text and post-text
 - Live positive-prompt and negative-prompt previews
-- A **Template requires** checklist showing exactly what should be connected
+- A **Template requires** list showing each variable and its mapped library source
 - Automatic blank-line cleanup and omission of empty variables
 - Deduplicated negative prompts
 
@@ -200,8 +200,9 @@ subcategory, and template. Its `positive_prompt` output can feed your positive
 text encoder, while `negative_prompt` provides the combined negative text for
 workflows that use it. Both outputs remain visible in live previews.
 
-The live **Template requires** panel shows whether each variable is connected,
-which library source it expects, and which preset currently fills it.
+The **Template requires** panel lists each variable and its mapped library source.
+It deliberately avoids guessing whether the input is wired or fulfilled, so the
+display remains dependable when selectors live inside subgraphs.
 
 ## Aliases and multiple characters
 
