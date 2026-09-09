@@ -78,13 +78,14 @@ until the user explicitly disables it. Keep the base preset complete and use
 addenda for genuinely optional detail rather than splitting it into dozens of
 tiny required fragments.
 
-Design category controls as a small, stable interface. Every preset in a
-category should reuse the same addendum keys and meanings—for example,
-`body_details`, `alternate_hair`, or `identity_guardrails` for Characters.
-Different presets may supply different text for a shared control or leave it
-empty. The Selector exposes only the controls declared by that category, with a
-maximum of eight, and ComfyUI Nodes 2.0 can promote those native Boolean
-controls through subgraphs without exposing JSON state.
+Design category slots as a small, stable capacity rather than a fixed semantic
+interface. Slot keys such as `option_1`, `option_2`, and `option_3` preserve the
+promoted subgraph inputs. Each preset may give a used slot its own label and
+meaning—for example, a Character can label `option_1` as `Add Nipple Detail`,
+while an Outfit can label its first slot `Add Puka Shell Necklace`. Omit unused
+slots from the preset's `addenda`; the Selector hides them. Keep the slot order
+stable after workflows promote the controls. The maximum is eight, and ComfyUI
+Nodes 2.0 can promote the native Boolean controls without exposing JSON state.
 
 You can add model-specific preferences after that instruction. For example,
 you might ask for concise natural-language prose, tag-oriented prompting, or a

@@ -239,6 +239,7 @@ function selectedLibraryEntry(node, overrides, overrideContext) {
     const libraryNegative = preset?.negative_prompt || "";
     const addendaItems = preset?.addenda ?? [];
     const enabledKeys = new Set(addendaItems.filter((item, index) =>
+        item.available !== false &&
         widgetValue(node, `addendum_${index + 1}`, overrides) === true
     ).map((item) => item.key));
     const chosenAddenda = addendaItems.filter((item) => enabledKeys.has(item.key));
@@ -362,8 +363,9 @@ function syncPromotedAddendaControls(
         const binding = bindings.get(`addendum_${index + 1}`);
         if (!binding?.hostWidget) continue;
         const addendum = selectedPreset?.addenda?.[index];
+        const available = Boolean(addendum && addendum.available !== false);
         const widget = binding.hostWidget;
-        const label = addendum
+        const label = available
             ? `Add: ${selectedPreset.label} — ${addendum.label}`
             : `Unused addendum ${index + 1}`;
         if (widget.label !== label) {
@@ -371,9 +373,9 @@ function syncPromotedAddendaControls(
             binding.hostInput.label = label;
             updated = true;
         }
-        const visibilityUpdated = setWidgetHidden(subgraphNode, widget, !addendum);
+        const visibilityUpdated = setWidgetHidden(subgraphNode, widget, !available);
         updated ||= visibilityUpdated;
-        if (addendum && identityChanged) {
+        if (available && identityChanged) {
             widget.value = Boolean(addendum.default_enabled);
             updated = true;
         }
@@ -509,12 +511,13 @@ app.registerExtension({
                 const widget = addendaWidgets[index];
                 if (!widget) continue;
                 const addendum = selectedPreset?.addenda?.[index];
-                widget.label = addendum ? `Add: ${addendum.label}` : `Unused addendum ${index + 1}`;
-                setWidgetHidden(node, widget, !addendum);
-                widget.computedDisabled = !addendum;
+                const available = Boolean(addendum && addendum.available !== false);
+                widget.label = available ? `Add: ${addendum.label}` : `Unused addendum ${index + 1}`;
+                setWidgetHidden(node, widget, !available);
+                widget.computedDisabled = !available;
                 const slot = node.getSlotFromWidget?.(widget);
                 if (slot) slot.label = widget.label;
-                if (addendum && initialize) widget.value = Boolean(addendum.default_enabled);
+                if (available && initialize) widget.value = Boolean(addendum.default_enabled);
             }
             node.setSize?.(node.computeSize?.() ?? node.size);
         };

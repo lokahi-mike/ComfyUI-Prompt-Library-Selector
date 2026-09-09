@@ -75,8 +75,11 @@ When a Controller bundle is connected upstream, its shared seed takes priority
 and the Selector's **Local random seed (no Controller)** value is ignored.
 
 When a category defines `addenda_slots`, the Selector creates one stable
-**Add:** toggle for each slot. Presets fill those slots with their own optional
-text and defaults. Enabled positive addenda follow the preset text with
+**Add:** toggle position for each slot. Presets may fill any of those positions
+with their own visible label, optional text, and default. Unused positions stay
+hidden. For example, the first Character slot can appear as **Add Nipple
+Detail** for one preset while the first Outfit slot appears as **Add Puka Shell
+Necklace** for another. Enabled positive addenda follow the preset text with
 natural single-space separation before alias replacement and bundle composition.
 Their negative prompts and tags join the
 corresponding selector outputs. Toggle state is stored in the workflow, and a
@@ -364,9 +367,11 @@ on the outside of a subgraph. Open the subgraph and promote whichever visible
 category, subcategory, preset, or seed.
 
 The promoted switches are real subgraph inputs—not a JSON field with a cosmetic
-the category's stable `addenda_slots`; changing presets changes the text and
-default carried by those controls without changing the subgraph interface.
-Only the number of controls declared by the category is active, up to eight.
+button layered over it. Their positions come from the category's stable
+`addenda_slots`; changing presets changes the label, text, and default carried
+by those positions without changing the subgraph interface.
+Only positions configured by the selected preset are visible, up to the
+category's declared capacity of eight.
 For nested subgraphs, promote each desired switch once through every boundary
 where it should be available.
 
@@ -578,10 +583,11 @@ Keys are saved in workflows and should remain stable. Labels are presentation
 text and may be renamed safely. YAML block scalars such as `|-` and `>-` work
 well for long prompt text.
 
-`addenda_slots` declares the category's stable checkbox interface, with a
-maximum of eight controls. Every preset in that category displays the same
-controls in the same order. A preset's `addenda` mapping supplies text,
-negative text, tags, and its default state for the corresponding slot key.
+`addenda_slots` declares the category's stable checkbox positions, with a
+maximum capacity of eight. Slot order is structural and is not changed when a
+friendly label is renamed. A preset's `addenda` mapping decides which positions
+are available and supplies each position's visible label, text, negative text,
+tags, and default state. Positions omitted by the selected preset remain hidden.
 The Workbench creates and maintains these mappings without raw YAML editing.
 
 ## Refresh and reload behavior

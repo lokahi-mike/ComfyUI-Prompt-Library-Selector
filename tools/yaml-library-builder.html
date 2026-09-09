@@ -929,7 +929,6 @@
       }
       sortByLabel(state.categories);
       for (const category of state.categories) {
-        sortByLabel(category.addendaSlots);
         sortByLabel(category.subcategories);
         for (const subcategory of category.subcategories) sortByLabel(subcategory.presets);
       }
@@ -991,12 +990,21 @@
 
     function resolvedPresetAddenda(entry) {
       if (!entry?.preset || !entry?.category) return [];
-      return entry.category.addendaSlots.map((slot) => {
+      return entry.category.addendaSlots.flatMap((slot) => {
         const value = entry.preset.addenda.find((item) => item.key === slot.key);
-        return value
-          ? {...value, key: slot.key, label: slot.label}
-          : {key: slot.key, label: slot.label, prompt: "", negativePrompt: "", tags: [], defaultEnabled: false};
+        return value && isConfiguredAddendum(value)
+          ? [{...value, key: slot.key, label: value.label || slot.label}]
+          : [];
       });
+    }
+
+    function isConfiguredAddendum(addendum) {
+      return Boolean(
+        String(addendum?.prompt ?? "").trim()
+        || String(addendum?.negativePrompt ?? "").trim()
+        || addendum?.defaultEnabled
+        || addendum?.tags?.length
+      );
     }
 
     function newTemplateCategory(label = "New Template Category") {
@@ -1230,20 +1238,23 @@
       details.className = "metadata addenda-editor";
       details.open = Boolean(category.addendaSlots.length);
       const summary = document.createElement("summary");
-      summary.textContent = `Category addendum controls (${category.addendaSlots.length})`;
+      summary.textContent = `Addendum slots / capacity (${category.addendaSlots.length})`;
       details.append(summary);
       const head = document.createElement("div");
       head.className = "addenda-head";
       const hint = document.createElement("span");
       hint.className = "hint";
-      hint.textContent = "Stable checkbox controls shared by every preset in this category (maximum 8).";
+      hint.textContent = "Stable positions available to presets. Each preset supplies its own visible label and content (maximum 8).";
       const add = document.createElement("button");
       add.type = "button";
       add.className = "compact";
       add.textContent = "+ Control";
       add.disabled = category.addendaSlots.length >= 8;
       add.addEventListener("click", () => {
-        if (category.addendaSlots.length < 8) category.addendaSlots.push(newAddendaSlot());
+        if (category.addendaSlots.length < 8) {
+          const position = category.addendaSlots.length + 1;
+          category.addendaSlots.push(newAddendaSlot(`Optional Detail ${position}`, `option_${position}`));
+        }
         render();
       });
       head.append(hint, add);
@@ -1251,7 +1262,7 @@
       for (const slot of category.addendaSlots) {
         const card = document.createElement("div");
         card.className = "addendum-card";
-        for (const [caption, property] of [["Control label", "label"], ["Stable key", "key"]]) {
+        for (const [caption, property] of [["Fallback label", "label"], ["Stable key", "key"]]) {
           const label = document.createElement("label");
           label.textContent = caption;
           const input = document.createElement("input");
@@ -1296,15 +1307,15 @@
       details.className = "metadata addenda-editor";
       details.open = Boolean(category.addendaSlots.length);
       const summary = document.createElement("summary");
-      summary.textContent = `Category addenda content (${category.addendaSlots.length})`;
+      summary.textContent = `Optional addenda for this preset`;
       details.append(summary);
       const head = document.createElement("div");
       head.className = "addenda-head";
       const hint = document.createElement("span");
       hint.className = "hint";
       hint.textContent = category.addendaSlots.length
-        ? "Text contributed by this preset when each category control is enabled."
-        : "Add controls on the category first.";
+        ? "Define only the options this preset needs. Empty slots stay hidden in ComfyUI."
+        : "Add stable slots on the category first.";
       head.append(hint);
       details.append(head);
       for (const slot of category.addendaSlots) {
@@ -1315,13 +1326,13 @@
           addendum.autoKey = false;
           preset.addenda.push(addendum);
         }
-        addendum.label = slot.label;
         const card = document.createElement("div");
         card.className = "addendum-card";
         const title = document.createElement("strong");
-        title.textContent = slot.label;
+        title.textContent = `${slot.key} slot`;
         card.append(title);
         card.append(
+          addendumField(addendum, "Visible toggle label", "label"),
           addendumField(addendum, "Positive prompt", "prompt", true),
           addendumField(addendum, "Negative prompt", "negativePrompt", true),
           addendumField(addendum, "Metadata tags", "tags"),
@@ -2553,13 +2564,12 @@
             if (preset.negativePrompt.trim()) lines.push("            negative_prompt: |-", indentPrompt(preset.negativePrompt, 14));
             if (preset.templateSlot.trim()) lines.push(`            template_slot: ${quote(preset.templateSlot.trim())}`);
             if (preset.tags.length) lines.push("            metadata:", `              tags: ${tagYaml(preset.tags)}`);
-            const populatedAddenda = preset.addenda.filter((addendum) =>
-              addendum.prompt.trim() || addendum.negativePrompt.trim()
-              || addendum.defaultEnabled || addendum.tags.length);
+            const populatedAddenda = preset.addenda.filter(isConfiguredAddendum);
             if (populatedAddenda.length) {
               lines.push("            addenda:");
               for (const addendum of populatedAddenda) {
                 lines.push(`              ${keyLine(addendum.key)}:`);
+                if (addendum.label.trim()) lines.push(`                label: ${quote(addendum.label.trim())}`);
                 if (addendum.prompt.trim()) lines.push("                prompt: |-", indentPrompt(addendum.prompt, 18));
                 if (addendum.negativePrompt.trim()) lines.push("                negative_prompt: |-", indentPrompt(addendum.negativePrompt, 18));
                 if (addendum.defaultEnabled) lines.push("                default_enabled: true");

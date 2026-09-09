@@ -146,6 +146,16 @@ class NodeIntegrationTests(unittest.TestCase):
         self.assertEqual(result[3]["segments"][0]["variable"], "character_a")
         self.assertEqual(result[4], "Alpha")
 
+    def test_unconfigured_addendum_slots_ignore_stale_enabled_switches(self):
+        response = self.nodes.PromptLibrarySelector().select_prompt(
+            "characters", "people", "beta", alias="Character A",
+            template_variable="character_a", addendum_1=True, addendum_2=True,
+        )
+        result = response["result"]
+        self.assertEqual(result[0], "Character A is Beta.")
+        self.assertEqual(result[1], "")
+        self.assertEqual(result[2], "subject, beta")
+
     def test_selector_seed_is_numeric_without_after_generate_mode(self):
         seed_type, seed_options = (
             self.nodes.PromptLibrarySelector.INPUT_TYPES()["optional"]["seed"]

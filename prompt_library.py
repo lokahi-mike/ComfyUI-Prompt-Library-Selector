@@ -321,7 +321,10 @@ class PromptLibrary:
         if not isinstance(raw, dict):
             return []
         result = []
-        for key, raw_slot in cls._sorted_items(raw):
+        # Slot keys define the stable promoted-widget positions. Keep their order
+        # independent from friendly labels so renaming a label cannot reshuffle a
+        # saved subgraph interface.
+        for key, raw_slot in raw.items():
             slot = cls._entry_mapping(raw_slot)
             result.append({
                 "key": str(key),
@@ -341,17 +344,24 @@ class PromptLibrary:
         slot_items = [(slot["key"], slot) for slot in (slots or [])]
         items = slot_items or list(cls._sorted_items(raw))
         for key, slot in items:
+            available = not slot_items or key in raw
             raw_addendum = raw.get(key, {}) if slot_items else slot
             addendum = cls._entry_mapping(raw_addendum)
+            label = (
+                addendum.get("label") or slot.get("label") or cls._label(key, addendum)
+                if available
+                else slot.get("label") or cls._label(key, addendum)
+            )
             result.append({
                 "key": str(key),
-                "label": str(slot.get("label") or cls._label(key, addendum)),
+                "label": str(label),
                 "prompt": str(addendum.get("prompt", "") or ""),
                 "negative_prompt": str(addendum.get("negative_prompt", "") or ""),
                 "default_enabled": bool(addendum.get(
                     "default_enabled", slot.get("default_enabled", False)
                 )),
                 "tags": cls._tags(addendum),
+                "available": available,
             })
         return result[:8]
 

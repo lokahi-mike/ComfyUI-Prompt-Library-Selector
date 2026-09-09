@@ -285,15 +285,17 @@ class PromptLibrarySelector:
         )
         if all(value is None for value in switches):
             enabled_keys = {
-                item["key"] for item in entry["addenda"] if item["default_enabled"]
+                item["key"] for item in entry["addenda"]
+                if item.get("available", True) and item["default_enabled"]
             }
         else:
             enabled_keys = {
                 item["key"] for index, item in enumerate(entry["addenda"][:8])
-                if switches[index]
+                if item.get("available", True) and switches[index]
             }
         chosen_addenda = [
-            item for item in entry["addenda"] if item["key"] in enabled_keys
+            item for item in entry["addenda"]
+            if item.get("available", True) and item["key"] in enabled_keys
         ]
         base_prompt = str(prompt_override or "").strip() or entry["prompt"]
         base_negative = str(negative_override or "").strip() or entry["negative_prompt"]

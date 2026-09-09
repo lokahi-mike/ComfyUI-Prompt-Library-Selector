@@ -77,7 +77,7 @@ categories:
             negative_prompt: distorted face
             addenda:
               freckles:
-                label: Freckles
+                label: Add Facial Freckles
                 prompt: '{{subject}} has freckles.'
                 metadata:
                   tags: [freckles]
@@ -182,6 +182,8 @@ class PromptLibraryTests(unittest.TestCase):
             [item["key"] for item in preset["addenda"]],
             ["freckles", "identity_guardrails"],
         )
+        self.assertEqual(preset["addenda"][0]["label"], "Add Facial Freckles")
+        self.assertTrue(all(item["available"] for item in preset["addenda"]))
         self.assertTrue(preset["addenda"][1]["default_enabled"])
         second_preset = catalog["categories"][0]["subcategories"][0]["presets"][1]
         self.assertEqual(
@@ -189,6 +191,7 @@ class PromptLibraryTests(unittest.TestCase):
             ["freckles", "identity_guardrails"],
         )
         self.assertTrue(all(not item["prompt"] for item in second_preset["addenda"]))
+        self.assertTrue(all(not item["available"] for item in second_preset["addenda"]))
 
     def test_flat_v2_templates_are_exposed_under_general_groups(self):
         self.path.write_text(SAMPLE_FLAT_V2, encoding="utf-8")
