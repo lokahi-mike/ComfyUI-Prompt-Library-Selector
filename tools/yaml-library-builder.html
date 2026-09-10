@@ -423,7 +423,13 @@
       </div>
     </section>
     <section class="panel preview-panel" style="grid-column: span 2">
-      <div class="panel-head"><h2>Live Output</h2><span id="playgroundStatus" class="privacy"></span></div>
+      <div class="panel-head">
+        <h2>Live Output</h2>
+        <div class="toolbar-row">
+          <span id="playgroundStatus" class="privacy"></span>
+          <button id="copyPlaygroundPositive" type="button">Copy positive prompt</button>
+        </div>
+      </div>
       <div class="panel-body output-stack">
         <div id="playgroundGuidance" class="guidance good">Prompt assembly check is ready.</div>
         <label>Positive prompt<textarea id="playgroundPositive" readonly></textarea></label>
@@ -3278,6 +3284,28 @@
       return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character]);
     }
 
+    async function copyTextToClipboard(value) {
+      const text = String(value ?? "");
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (error) {
+        console.warn("Modern clipboard access was unavailable; trying the browser fallback", error);
+      }
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.append(helper);
+      helper.select();
+      const copied = document.execCommand?.("copy") === true;
+      helper.remove();
+      return copied;
+    }
+
     function addTemplateCategory() {
       const category = newTemplateCategory();
       state.templateCategories.push(category);
@@ -3500,6 +3528,15 @@
       playground.overrides = {};
       playground.fields = {};
       renderPlayground();
+    });
+    document.querySelector("#copyPlaygroundPositive").addEventListener("click", async (event) => {
+      const prompt = document.querySelector("#playgroundPositive").value;
+      if (!prompt.trim()) {
+        event.currentTarget.textContent = "Nothing to copy";
+      } else {
+        event.currentTarget.textContent = await copyTextToClipboard(prompt) ? "Copied!" : "Copy failed";
+      }
+      setTimeout(() => { event.currentTarget.textContent = "Copy positive prompt"; }, 1200);
     });
     document.querySelector("#collapseAll").addEventListener("click", () => {
       expandedIds.clear();

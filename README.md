@@ -114,6 +114,7 @@ Random preset uses the same category controls for its resolved choice.
 - Automatic snake-case stable keys with duplicate-key validation
 - Live generated YAML with internal round-trip validation
 - Prompt Playground for testing complete assembled prompts offline
+- One-click copying of the assembled positive prompt
 - Seeded Random testing and temporary per-variable overrides
 - Model-neutral checks for modular, cleanly assembled prompts
 - Safe JSON import packets for prompt sections created by an AI
