@@ -180,6 +180,9 @@
     details.metadata summary { color: var(--muted); cursor: pointer; font-size: .8rem; font-weight: 650; }
     details.metadata[open] summary { margin-bottom: .75rem; }
     .addenda-editor { display: grid; gap: .7rem; }
+    .config-fields { display: grid; gap: .75rem; }
+    .config-field-card, .field-option-card { border: 1px solid var(--line); border-radius: 10px; padding: .75rem; display: grid; gap: .65rem; background: rgba(255,255,255,.018); }
+    .field-option-list { display: grid; gap: .55rem; padding-left: .65rem; border-left: 2px solid var(--line); }
     .addenda-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
     .addendum-card { display: grid; gap: .65rem; padding: .75rem; border: 1px solid var(--line); border-radius: 10px; background: rgba(17, 17, 23, .55); }
     .addendum-actions { display: flex; align-items: center; justify-content: space-between; gap: .65rem; }
@@ -573,6 +576,8 @@
       for (const category of data.categories) {
         category.id ||= makeId();
         category.tags = Array.isArray(category.tags) ? category.tags : [];
+        category.fields = Array.isArray(category.fields) ? category.fields : [];
+        for (const item of category.fields) normalizeConfigField(item);
         category.addendaSlots = Array.isArray(category.addendaSlots) ? category.addendaSlots : [];
         category.addendaSlots = Array.isArray(category.addendaSlots) ? category.addendaSlots : [];
         for (const slot of category.addendaSlots) normalizeAddendaSlot(slot);
@@ -582,6 +587,8 @@
         for (const subcategory of category.subcategories) {
           subcategory.id ||= makeId();
           subcategory.tags = Array.isArray(subcategory.tags) ? subcategory.tags : [];
+          subcategory.fields = Array.isArray(subcategory.fields) ? subcategory.fields : [];
+          for (const item of subcategory.fields) normalizeConfigField(item);
           subcategory.presets = Array.isArray(subcategory.presets) ? subcategory.presets : [];
           subcategory.autoKey ??= false;
           for (const preset of subcategory.presets) {
@@ -590,6 +597,8 @@
             preset.negativePrompt = String(preset.negativePrompt ?? "");
             preset.templateSlot = String(preset.templateSlot ?? "");
             preset.autoKey ??= false;
+            preset.fields = Array.isArray(preset.fields) ? preset.fields : [];
+            for (const item of preset.fields) normalizeConfigField(item);
             preset.addenda = Array.isArray(preset.addenda) ? preset.addenda : [];
             for (const addendum of preset.addenda) normalizeAddendum(addendum);
           }
@@ -655,6 +664,28 @@
       return slot;
     }
 
+    function normalizeConfigField(item) {
+      item.id ||= makeId();
+      item.label = String(item.label ?? item.key ?? "Untitled Field");
+      item.key = String(item.key ?? slugify(item.label));
+      item.type = ["checkbox", "select", "text", "multiline"].includes(item.type) ? item.type : "checkbox";
+      item.defaultValue = item.defaultValue ?? item.default ?? (item.type === "checkbox" ? false : "");
+      if (item.type === "checkbox") item.defaultValue = Boolean(item.defaultValue);
+      else item.defaultValue = typeof item.defaultValue === "boolean" ? "" : String(item.defaultValue ?? "");
+      item.prompt = String(item.prompt ?? "");
+      item.disabled = Boolean(item.disabled ?? false);
+      item.options = Array.isArray(item.options) ? item.options : [];
+      for (const option of item.options) {
+        option.id ||= makeId();
+        option.label = String(option.label ?? option.key ?? "Untitled Option");
+        option.key = String(option.key ?? slugify(option.label));
+        option.prompt = String(option.prompt ?? "");
+        option.autoKey ??= false;
+      }
+      item.autoKey ??= false;
+      return item;
+    }
+
     function suggestedTemplateSlot(key) {
       return ({
         characters: "character", outfits: "outfit", poses: "pose",
@@ -667,11 +698,11 @@
     function loadPlayground() {
       try {
         const saved = JSON.parse(localStorage.getItem(PLAYGROUND_STORAGE_KEY));
-        if (saved && typeof saved === "object") return { templateId: saved.templateId ?? null, seed: Number(saved.seed) || 1, selections: saved.selections ?? {}, overrides: saved.overrides ?? {}, addenda: saved.addenda ?? {} };
+        if (saved && typeof saved === "object") return { templateId: saved.templateId ?? null, seed: Number(saved.seed) || 1, selections: saved.selections ?? {}, overrides: saved.overrides ?? {}, addenda: saved.addenda ?? {}, fields: saved.fields ?? {} };
       } catch (error) {
         console.warn("Unable to restore playground state", error);
       }
-      return { templateId: null, seed: 1, selections: {}, overrides: {}, addenda: {} };
+      return { templateId: null, seed: 1, selections: {}, overrides: {}, addenda: {}, fields: {} };
     }
 
     function savePlayground() {
@@ -739,6 +770,8 @@
         playground.templateId = allTemplates()[0]?.template.id ?? null;
         playground.selections = {};
         playground.overrides = {};
+        playground.addenda = {};
+        playground.fields = {};
         render();
         setServerStatus(result.using_user_library ? "Loaded user library" : "Loaded bundled fallback");
       } catch (error) {
@@ -969,15 +1002,54 @@
     }
 
     function newCategory(label = "New Category") {
-      return { id: makeId(), key: slugify(label), label, tags: [], addendaSlots: [], subcategories: [], templateSlot: "", autoKey: true };
+      return { id: makeId(), key: slugify(label), label, tags: [], fields: [], addendaSlots: [], subcategories: [], templateSlot: "", autoKey: true };
     }
 
     function newSubcategory(label = "New Subcategory") {
-      return { id: makeId(), key: slugify(label), label, tags: [], presets: [], autoKey: true };
+      return { id: makeId(), key: slugify(label), label, tags: [], fields: [], presets: [], autoKey: true };
     }
 
     function newPreset(label = "New Preset") {
-      return { id: makeId(), key: slugify(label), label, tags: [], prompt: "", negativePrompt: "", templateSlot: "", addenda: [], autoKey: true };
+      return { id: makeId(), key: slugify(label), label, tags: [], fields: [], prompt: "", negativePrompt: "", templateSlot: "", addenda: [], autoKey: true };
+    }
+
+    function newConfigField(label = "New Field", type = "checkbox") {
+      return normalizeConfigField({
+        id: makeId(), key: slugify(label), label, type, autoKey: true,
+        defaultValue: type === "checkbox" ? false : "", prompt: "", disabled: false, options: [],
+      });
+    }
+
+    function newFieldOption(label = "New Option") {
+      return { id: makeId(), key: slugify(label), label, prompt: "", autoKey: true };
+    }
+
+    function mergeConfigFields(...levels) {
+      const merged = new Map();
+      for (const fields of levels) for (const raw of fields ?? []) {
+        const previous = merged.get(raw.key);
+        if (!previous) {
+          merged.set(raw.key, structuredClone(raw));
+          continue;
+        }
+        const options = new Map((previous.options ?? []).map((item) => [item.key, item]));
+        for (const option of raw.options ?? []) options.set(option.key, {...options.get(option.key), ...option});
+        merged.set(raw.key, {...previous, ...raw, options: [...options.values()]});
+      }
+      return [...merged.values()].filter((item) => !item.disabled);
+    }
+
+    function resolvedPresetFields(entry) {
+      if (!entry?.preset || !entry?.subcategory || !entry?.category) return [];
+      return mergeConfigFields(entry.category.fields, entry.subcategory.fields, entry.preset.fields);
+    }
+
+    function configuredFieldPrompt(field, value) {
+      if (field.type === "checkbox") return value ? field.prompt.trim() : "";
+      if (field.type === "select") return field.options.find((item) => item.key === value)?.prompt?.trim() ?? "";
+      const text = String(value ?? "").trim();
+      if (!text) return "";
+      return field.prompt.trim() ? field.prompt.replaceAll("{{value}}", text).trim() : text;
     }
 
     function newAddendum(label = "New Addendum") {
@@ -986,6 +1058,14 @@
 
     function newAddendaSlot(label = "New Addendum Slot", key = "") {
       return { id: makeId(), key: key || slugify(label), label, autoKey: !key };
+    }
+
+    function newConfigField(label = "New Field", type = "checkbox") {
+      return normalizeConfigField({ id: makeId(), key: slugify(label), label, type, prompt: "", options: [], autoKey: true });
+    }
+
+    function newFieldOption(label = "New Option") {
+      return { id: makeId(), key: slugify(label), label, prompt: "", autoKey: true };
     }
 
     function resolvedPresetAddenda(entry) {
@@ -1005,6 +1085,25 @@
         || addendum?.defaultEnabled
         || addendum?.tags?.length
       );
+    }
+
+    function resolvedConfigFields(entry) {
+      if (!entry?.preset || !entry?.category || !entry?.subcategory) return [];
+      const merged = new Map();
+      for (const level of [entry.category.fields, entry.subcategory.fields, entry.preset.fields]) {
+        for (const field of level ?? []) {
+          const previous = merged.get(field.key);
+          const options = new Map((previous?.options ?? []).map((item) => [item.key, {...item}]));
+          for (const option of field.options ?? []) options.set(option.key, {...options.get(option.key), ...option});
+          merged.set(field.key, {...previous, ...field, options: [...options.values()]});
+        }
+      }
+      return [...merged.values()].filter((field) => !field.disabled).map((field) => ({
+        ...field,
+        defaultValue: field.type === "checkbox"
+          ? Boolean(field.defaultValue)
+          : (typeof field.defaultValue === "boolean" ? "" : String(field.defaultValue ?? "")),
+      }));
     }
 
     function newTemplateCategory(label = "New Template Category") {
@@ -1129,6 +1228,7 @@
         form.append(field("Default template slot", "templateSlot", found.item.templateSlot, "Used as the {{variable}} name for presets in this category. Leave empty to use the category stable key."));
         form.append(addendaSlotsEditor(found.item));
       }
+      form.append(configFieldsEditor(found.item, selection.type));
       const metadata = document.createElement("details");
       metadata.className = "metadata";
       metadata.innerHTML = "<summary>Optional metadata tags</summary>";
@@ -1172,6 +1272,137 @@
       footer.append(actions);
       form.append(footer);
       editor.append(form);
+    }
+
+    function configFieldsEditor(owner, level) {
+      const details = document.createElement("details");
+      details.className = "metadata config-fields";
+      details.open = Boolean(owner.fields.length);
+      const summary = document.createElement("summary");
+      summary.textContent = `Configurable fields (${owner.fields.length})`;
+      details.append(summary);
+      const head = document.createElement("div");
+      head.className = "addenda-head";
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = level === "category"
+        ? "Inherited by every subcategory and preset. Lower levels can override a field by reusing its stable key."
+        : `Applied at the ${level} level. Reuse an inherited stable key to override it here.`;
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "compact";
+      add.textContent = "+ Field";
+      add.addEventListener("click", () => {
+        const field = newConfigField();
+        const used = new Set(owner.fields.map((item) => item.key));
+        let suffix = 2;
+        while (used.has(field.key)) field.key = `new_field_${suffix++}`;
+        owner.fields.push(field);
+        render();
+      });
+      head.append(hint, add);
+      details.append(head);
+
+      for (const item of owner.fields) {
+        const card = document.createElement("div");
+        card.className = "config-field-card";
+        const textInput = (caption, property, multiline = false) => {
+          const label = document.createElement("label");
+          label.textContent = caption;
+          const input = document.createElement(multiline ? "textarea" : "input");
+          input.value = item[property] ?? "";
+          if (multiline) input.rows = 3;
+          input.addEventListener("input", () => {
+            const oldKey = item.key;
+            item[property] = input.value;
+            if (property === "label" && item.autoKey) item.key = slugify(input.value);
+            if (property === "key") item.autoKey = false;
+            if (oldKey !== item.key) {
+              const keyInput = card.querySelector("[data-config-field-key]");
+              if (keyInput) keyInput.value = item.key;
+            }
+            renderWithoutEditor();
+          });
+          if (property === "key") input.dataset.configFieldKey = "true";
+          label.append(input);
+          return label;
+        };
+        card.append(textInput("Field label", "label"), textInput("Stable key", "key"));
+
+        const typeLabel = document.createElement("label");
+        typeLabel.textContent = "Control type";
+        const type = document.createElement("select");
+        for (const [value, labelText] of [["checkbox", "Checkbox"], ["select", "Select box"], ["text", "Free text"], ["multiline", "Multiline text"]]) {
+          const option = document.createElement("option"); option.value = value; option.textContent = labelText; type.append(option);
+        }
+        type.value = item.type;
+        type.addEventListener("change", () => {
+          item.type = type.value;
+          item.defaultValue = item.type === "checkbox" ? false : "";
+          render();
+        });
+        typeLabel.append(type); card.append(typeLabel);
+
+        if (item.type === "checkbox") {
+          card.append(textInput("Prompt added when checked", "prompt", true));
+          const defaultLabel = document.createElement("label"); defaultLabel.className = "checkbox-field";
+          const toggle = document.createElement("input"); toggle.type = "checkbox"; toggle.checked = Boolean(item.defaultValue);
+          toggle.addEventListener("change", () => { item.defaultValue = toggle.checked; renderWithoutEditor(); });
+          defaultLabel.append(toggle, document.createTextNode("Checked by default")); card.append(defaultLabel);
+        } else if (item.type === "select") {
+          const defaultLabel = document.createElement("label"); defaultLabel.textContent = "Default option";
+          const defaultSelect = document.createElement("select");
+          const blank = document.createElement("option"); blank.value = ""; blank.textContent = "None"; defaultSelect.append(blank);
+          for (const fieldOption of item.options) {
+            const option = document.createElement("option"); option.value = fieldOption.key; option.textContent = fieldOption.label; defaultSelect.append(option);
+          }
+          defaultSelect.value = String(item.defaultValue ?? "");
+          defaultSelect.addEventListener("change", () => { item.defaultValue = defaultSelect.value; renderWithoutEditor(); });
+          defaultLabel.append(defaultSelect); card.append(defaultLabel);
+          const optionList = document.createElement("div"); optionList.className = "field-option-list";
+          for (const fieldOption of item.options) optionList.append(configFieldOptionEditor(item, fieldOption));
+          const addOption = document.createElement("button"); addOption.type = "button"; addOption.className = "compact"; addOption.textContent = "+ Select option";
+          addOption.addEventListener("click", () => { item.options.push(newFieldOption()); render(); });
+          optionList.append(addOption); card.append(optionList);
+        } else {
+          card.append(textInput("Default text", "defaultValue", item.type === "multiline"));
+          card.append(textInput("Prompt pattern (optional)", "prompt", true));
+          const help = document.createElement("span"); help.className = "hint";
+          help.textContent = "Use {{value}} where the entered text belongs. Leave this empty to append the entered text directly.";
+          card.append(help);
+        }
+
+        if (level !== "category") {
+          const hiddenLabel = document.createElement("label"); hiddenLabel.className = "checkbox-field";
+          const hidden = document.createElement("input"); hidden.type = "checkbox"; hidden.checked = item.disabled;
+          hidden.addEventListener("change", () => { item.disabled = hidden.checked; renderWithoutEditor(); });
+          hiddenLabel.append(hidden, document.createTextNode("Hide this inherited field at this level")); card.append(hiddenLabel);
+        }
+        const remove = document.createElement("button"); remove.type = "button"; remove.className = "compact danger"; remove.textContent = "Remove field definition";
+        remove.addEventListener("click", () => { owner.fields = owner.fields.filter((field) => field.id !== item.id); render(); });
+        card.append(remove); details.append(card);
+      }
+      return details;
+    }
+
+    function configFieldOptionEditor(field, item) {
+      const card = document.createElement("div"); card.className = "field-option-card";
+      const addInput = (caption, property, multiline = false) => {
+        const label = document.createElement("label"); label.textContent = caption;
+        const input = document.createElement(multiline ? "textarea" : "input"); input.value = item[property] ?? "";
+        if (multiline) input.rows = 2;
+        input.addEventListener("input", () => {
+          item[property] = input.value;
+          if (property === "label" && item.autoKey) item.key = slugify(input.value);
+          if (property === "key") item.autoKey = false;
+          renderWithoutEditor();
+        });
+        label.append(input); return label;
+      };
+      card.append(addInput("Option label", "label"), addInput("Option key", "key"), addInput("Prompt for this option", "prompt", true));
+      const remove = document.createElement("button"); remove.type = "button"; remove.className = "ghost compact"; remove.textContent = "Remove option";
+      remove.addEventListener("click", () => { field.options = field.options.filter((option) => option.id !== item.id); render(); });
+      card.append(remove); return card;
     }
 
     function field(labelText, property, value, hint = "", multiline = false) {
@@ -1872,6 +2103,60 @@
       for (const message of messages) { const line = document.createElement("div"); line.textContent = message; box.append(line); }
     }
 
+    function playgroundFieldKey(variable, entry, field) {
+      return `${variable}:${entry.preset.id}:${field.key}`;
+    }
+
+    function playgroundFieldValue(variable, entry, field) {
+      const key = playgroundFieldKey(variable, entry, field);
+      if (!Object.prototype.hasOwnProperty.call(playground.fields, key)) {
+        playground.fields[key] = field.type === "checkbox"
+          ? Boolean(field.defaultValue)
+          : (typeof field.defaultValue === "boolean" ? "" : String(field.defaultValue ?? ""));
+      }
+      return playground.fields[key];
+    }
+
+    function playgroundFieldFragments(variable, entry) {
+      return resolvedConfigFields(entry).map((field) =>
+        configuredFieldPrompt(field, playgroundFieldValue(variable, entry, field))
+      ).filter(Boolean);
+    }
+
+    function playgroundFieldsEditor(variable, entry) {
+      const fields = resolvedConfigFields(entry);
+      if (!fields.length) return null;
+      const details = document.createElement("details"); details.className = "metadata"; details.open = true;
+      details.innerHTML = "<summary>Configurable details</summary>";
+      for (const field of fields) {
+        const label = document.createElement("label"); label.textContent = field.label;
+        const key = playgroundFieldKey(variable, entry, field);
+        const current = playgroundFieldValue(variable, entry, field);
+        let control;
+        if (field.type === "checkbox") {
+          label.className = "checkbox-field";
+          control = document.createElement("input"); control.type = "checkbox"; control.checked = Boolean(current);
+          label.replaceChildren(control, document.createTextNode(field.label));
+          control.addEventListener("change", () => { playground.fields[key] = control.checked; updatePlaygroundOutput(); });
+        } else if (field.type === "select") {
+          control = document.createElement("select");
+          control.add(new Option("None", ""));
+          for (const option of field.options) control.add(new Option(option.label, option.key));
+          control.value = String(current ?? "");
+          control.addEventListener("change", () => { playground.fields[key] = control.value; updatePlaygroundOutput(); });
+          label.append(control);
+        } else {
+          control = document.createElement(field.type === "multiline" ? "textarea" : "input");
+          control.value = String(current ?? "");
+          if (field.type === "multiline") control.rows = 3;
+          control.addEventListener("input", () => { playground.fields[key] = control.value; updatePlaygroundOutput(); });
+          label.append(control);
+        }
+        details.append(label);
+      }
+      return details;
+    }
+
     function renderPlayground() {
       const templateSelect = document.querySelector("#playgroundTemplate");
       const slots = document.querySelector("#playgroundSlots");
@@ -1960,8 +2245,11 @@
         box.append(head, select);
         if (addendaBox) box.append(addendaBox);
         box.append(details); slots.append(box);
+        const fieldsBox = entry ? playgroundFieldsEditor(variable, entry) : null;
+        if (fieldsBox) box.append(fieldsBox);
         const chosenAddenda = availableAddenda.filter((item) => enabledAddenda.has(item.key));
-        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join(" ");
+        const fieldPrompts = entry ? playgroundFieldFragments(variable, entry) : [];
+        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...fieldPrompts, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join(" ");
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         for (const negativePrompt of [override.negative.trim() || entry?.preset.negativePrompt || "", ...chosenAddenda.map((item) => item.negativePrompt)]) if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? []), ...chosenAddenda.flatMap((item) => item.tags)]) tags.add(tag);
@@ -2000,7 +2288,8 @@
         }
         const enabledAddenda = new Set(addendaKey ? playground.addenda[addendaKey] : []);
         const chosenAddenda = availableAddenda.filter((item) => enabledAddenda.has(item.key));
-        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join(" ");
+        const fieldPrompts = entry ? playgroundFieldFragments(variable, entry) : [];
+        const prompt = [override.positive.trim() || entry?.preset.prompt || defaultValue, ...fieldPrompts, ...chosenAddenda.map((item) => item.prompt)].filter((value) => String(value).trim()).join(" ");
         values[variable] = applySubjectAlias(prompt, template.aliases?.[variable]);
         for (const negativePrompt of [override.negative.trim() || entry?.preset.negativePrompt || "", ...chosenAddenda.map((item) => item.negativePrompt)]) if (negativePrompt.trim()) negatives.push(negativePrompt.trim());
         for (const tag of [...(entry?.category.tags ?? []), ...(entry?.subcategory.tags ?? []), ...(entry?.preset.tags ?? []), ...chosenAddenda.flatMap((item) => item.tags)]) tags.add(tag);
@@ -2046,6 +2335,36 @@
       ]
     };
 
+    function importConfigFields(value) {
+      const entries = Array.isArray(value)
+        ? value.map((item) => [item?.key || item?.stable_key || slugify(item?.label || "field"), item])
+        : Object.entries(value && typeof value === "object" ? value : {});
+      return entries.map(([key, raw]) => {
+        const source = raw && typeof raw === "object" ? raw : {};
+        const options = Array.isArray(source.options)
+          ? source.options
+          : Object.entries(source.options && typeof source.options === "object" ? source.options : {}).map(([optionKey, option]) => ({key: optionKey, ...(typeof option === "object" ? option : {prompt: option})}));
+        return normalizeConfigField({
+          id: makeId(), key: String(key), label: String(source.label || String(key).replaceAll("_", " ")),
+          type: String(source.type || "checkbox"), defaultValue: source.default ?? source.defaultValue,
+          prompt: String(source.prompt || ""), disabled: Boolean(source.disabled), autoKey: false,
+          options: options.map((option) => ({
+            id: makeId(), key: String(option.key || option.stable_key || slugify(option.label || "option")),
+            label: String(option.label || option.key || "Option"), prompt: String(option.prompt || ""), autoKey: false,
+          })),
+        });
+      });
+    }
+
+    function mergeConfigFields(owner, incoming) {
+      owner.fields ??= [];
+      for (const field of incoming ?? []) {
+        const index = owner.fields.findIndex((item) => item.key === field.key);
+        if (index < 0) owner.fields.push(field);
+        else owner.fields[index] = field;
+      }
+    }
+
     function importTarget(value, fallbackLabel) {
       const source = typeof value === "string" ? { label: value } : (value && typeof value === "object" ? value : {});
       const label = String(source.label || source.name || fallbackLabel).trim();
@@ -2054,6 +2373,7 @@
         label,
         templateSlot: String(source.template_slot || source.templateSlot || "").trim(),
         tags: Array.isArray(source.tags) ? source.tags.map(String) : splitTags(source.tags),
+        fields: importConfigFields(source.fields),
       };
     }
 
@@ -2106,6 +2426,7 @@
           templateSlot: String(raw.template_slot ?? raw.templateSlot ?? "").trim(),
           tags: Array.isArray(raw.tags) ? raw.tags.map(String) : splitTags(raw.tags),
           addenda: importAddenda(raw.addenda),
+          fields: importConfigFields(raw.fields),
         };
       });
     }
@@ -2149,6 +2470,7 @@
         }
         groups.push(category);
       }
+      if (item.type === "preset") mergeConfigFields(category, item.category.fields);
       let subcategory = category.subcategories.find((entry) => entry.key === item.subcategory.key);
       if (!subcategory) {
         subcategory = item.type === "template" ? newTemplateSubcategory(item.subcategory.label) : newSubcategory(item.subcategory.label);
@@ -2156,6 +2478,7 @@
         if (item.type === "preset") subcategory.tags = item.subcategory.tags;
         category.subcategories.push(subcategory);
       }
+      if (item.type === "preset") mergeConfigFields(subcategory, item.subcategory.fields);
       return { category, subcategory };
     }
 
@@ -2175,7 +2498,7 @@
             }
           }
           const preset = newPreset(item.label);
-          Object.assign(preset, { key: item.key, autoKey: false, prompt: item.prompt, negativePrompt: item.negativePrompt, templateSlot: item.templateSlot, tags: item.tags, addenda: item.addenda });
+          Object.assign(preset, { key: item.key, autoKey: false, prompt: item.prompt, negativePrompt: item.negativePrompt, templateSlot: item.templateSlot, tags: item.tags, addenda: item.addenda, fields: item.fields });
           subcategory.presets.push(preset);
           selection = { type: "preset", id: preset.id };
         }
@@ -2230,6 +2553,10 @@
       copy.key = uniquePresetKey(found.subcategory, `${found.preset.key}_copy`);
       copy.autoKey = false;
       copy.addenda = copy.addenda.map((item) => ({...item, id: makeId(), autoKey: false}));
+      copy.fields = copy.fields.map((field) => ({
+        ...field, id: makeId(), autoKey: false,
+        options: field.options.map((option) => ({...option, id: makeId(), autoKey: false})),
+      }));
       found.subcategory.presets.push(copy);
       expandedIds.add(found.category.id);
       expandedIds.add(found.subcategory.id);
@@ -2241,11 +2568,19 @@
     }
 
     function presetImportPacket(found) {
+      const exportFields = (fields) => Object.fromEntries(fields.map((field) => [field.key, {
+        label: field.label, type: field.type, default: field.defaultValue,
+        ...(field.prompt.trim() ? {prompt: field.prompt} : {}),
+        ...(field.disabled ? {disabled: true} : {}),
+        ...(field.type === "select" ? {options: Object.fromEntries(field.options.map((option) => [option.key, {
+          label: option.label, ...(option.prompt.trim() ? {prompt: option.prompt} : {}),
+        }]))} : {}),
+      }]));
       const addenda = {};
       for (const item of found.preset.addenda.filter(addendumHasContent)) {
         const slot = found.category.addendaSlots.find((candidate) => candidate.key === item.key);
         addenda[item.key] = {
-          label: slot?.label || item.label || item.key.replaceAll("_", " "),
+          label: item.label || slot?.label || item.key.replaceAll("_", " "),
           ...(item.prompt.trim() ? {prompt: item.prompt} : {}),
           ...(item.negativePrompt.trim() ? {negative_prompt: item.negativePrompt} : {}),
           ...(item.tags.length ? {tags: item.tags} : {}),
@@ -2259,10 +2594,12 @@
             key: found.category.key, label: found.category.label,
             ...(found.category.templateSlot.trim() ? {template_slot: found.category.templateSlot.trim()} : {}),
             ...(found.category.tags.length ? {tags: found.category.tags} : {}),
+            ...(found.category.fields.length ? {fields: exportFields(found.category.fields)} : {}),
           },
           subcategory: {
             key: found.subcategory.key, label: found.subcategory.label,
             ...(found.subcategory.tags.length ? {tags: found.subcategory.tags} : {}),
+            ...(found.subcategory.fields.length ? {fields: exportFields(found.subcategory.fields)} : {}),
           },
           key: found.preset.key,
           label: found.preset.label,
@@ -2270,6 +2607,7 @@
           ...(found.preset.negativePrompt.trim() ? {negative_prompt: found.preset.negativePrompt} : {}),
           ...(found.preset.templateSlot.trim() ? {template_slot: found.preset.templateSlot.trim()} : {}),
           ...(found.preset.tags.length ? {tags: found.preset.tags} : {}),
+          ...(found.preset.fields.length ? {fields: exportFields(found.preset.fields)} : {}),
           ...(Object.keys(addenda).length ? {addenda} : {}),
         }],
       };
@@ -2428,6 +2766,16 @@
           seen.add(item.key);
         }
       };
+      const checkFields = (fields, context) => {
+        checkGroup(fields, `${context} fields`);
+        for (const field of fields) {
+          if (!["checkbox", "select", "text", "multiline"].includes(field.type)) errors.push(`${context}/${field.key} has an unsupported field type`);
+          checkGroup(field.options, `${context}/${field.key} options`);
+          if (field.type === "select" && field.defaultValue && !field.options.some((option) => option.key === field.defaultValue)) {
+            errors.push(`${context}/${field.key} has an unknown default option “${field.defaultValue}”`);
+          }
+        }
+      };
       checkGroup(state.categories, "categories");
       checkGroup(state.templateCategories, "template categories");
       for (const category of state.templateCategories) {
@@ -2440,12 +2788,15 @@
       for (const category of state.categories) {
         if (category.templateSlot && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(category.templateSlot)) errors.push(`Template slot “${category.templateSlot}” is invalid`);
         checkGroup(category.addendaSlots, `${category.key || "category"} addendum controls`);
+        checkFields(category.fields, category.key || "category");
         if (category.addendaSlots.length > 8) errors.push(`${category.key || "category"} has more than 8 addendum controls`);
         const slotKeys = new Set(category.addendaSlots.map((slot) => slot.key));
         checkGroup(category.subcategories, category.key || "category");
         for (const subcategory of category.subcategories) {
+          checkFields(subcategory.fields, `${category.key}/${subcategory.key}`);
           checkGroup(subcategory.presets, subcategory.key || "subcategory");
           for (const preset of subcategory.presets) {
+            checkFields(preset.fields, `${category.key}/${subcategory.key}/${preset.key}`);
             if (preset.templateSlot && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(preset.templateSlot)) errors.push(`Template slot “${preset.templateSlot}” is invalid`);
             checkGroup(preset.addenda, `${category.key}/${subcategory.key}/${preset.key} addenda`);
             for (const addendum of preset.addenda) {
@@ -2458,6 +2809,11 @@
     }
 
     function librarySignature(data) {
+      const fieldSignature = (fields) => (fields ?? []).map((field) => ({
+        key: field.key, label: field.label, type: field.type,
+        defaultValue: field.defaultValue, prompt: field.prompt, disabled: field.disabled,
+        options: field.options.map((option) => ({key: option.key, label: option.label, prompt: option.prompt})),
+      }));
       return JSON.stringify({
         templateCategories: data.templateCategories.map((category) => ({
           key: category.key, label: category.label,
@@ -2476,12 +2832,15 @@
         })),
         categories: data.categories.map((category) => ({
           key: category.key, label: category.label, templateSlot: category.templateSlot, tags: category.tags,
+          fields: fieldSignature(category.fields),
           addendaSlots: category.addendaSlots.map((slot) => ({key: slot.key, label: slot.label})),
           subcategories: category.subcategories.map((subcategory) => ({
             key: subcategory.key, label: subcategory.label, tags: subcategory.tags,
+            fields: fieldSignature(subcategory.fields),
             presets: subcategory.presets.map((preset) => ({
               key: preset.key, label: preset.label, prompt: preset.prompt,
               negativePrompt: preset.negativePrompt, templateSlot: preset.templateSlot, tags: preset.tags,
+              fields: fieldSignature(preset.fields),
               addenda: preset.addenda.filter((addendum) =>
                 addendum.prompt.trim() || addendum.negativePrompt.trim()
                 || addendum.defaultEnabled || addendum.tags.length
@@ -2506,6 +2865,26 @@
         return ["Generated YAML failed its internal round-trip check"];
       } catch (error) {
         return [`Generated YAML could not be re-imported: ${error.message}`];
+      }
+    }
+
+    function appendConfigFields(lines, fields, indent) {
+      if (!fields?.length) return;
+      const pad = " ".repeat(indent);
+      lines.push(`${pad}fields:`);
+      for (const field of fields) {
+        lines.push(`${pad}  ${keyLine(field.key)}:`, `${pad}    label: ${quote(field.label)}`, `${pad}    type: ${quote(field.type)}`);
+        if (field.disabled) lines.push(`${pad}    disabled: true`);
+        if (field.type === "checkbox") lines.push(`${pad}    default: ${field.defaultValue ? "true" : "false"}`);
+        else if (String(field.defaultValue ?? "").trim()) lines.push(`${pad}    default: ${quote(String(field.defaultValue))}`);
+        if (field.prompt.trim()) lines.push(`${pad}    prompt: |-`, indentPrompt(field.prompt, indent + 6));
+        if (field.type === "select" && field.options.length) {
+          lines.push(`${pad}    options:`);
+          for (const option of field.options) {
+            lines.push(`${pad}      ${keyLine(option.key)}:`, `${pad}        label: ${quote(option.label)}`);
+            if (option.prompt.trim()) lines.push(`${pad}        prompt: |-`, indentPrompt(option.prompt, indent + 10));
+          }
+        }
       }
     }
 
@@ -2546,6 +2925,7 @@
         lines.push(`  ${keyLine(category.key)}:`, `    label: ${quote(category.label)}`);
         if (category.templateSlot.trim()) lines.push(`    template_slot: ${quote(category.templateSlot.trim())}`);
         if (category.tags.length) lines.push("    metadata:", `      tags: ${tagYaml(category.tags)}`);
+        appendConfigFields(lines, category.fields, 4);
         if (category.addendaSlots.length) {
           lines.push("    addenda_slots:");
           for (const slot of category.addendaSlots) {
@@ -2557,6 +2937,7 @@
         for (const subcategory of category.subcategories) {
           lines.push(`      ${keyLine(subcategory.key)}:`, `        label: ${quote(subcategory.label)}`);
           if (subcategory.tags.length) lines.push("        metadata:", `          tags: ${tagYaml(subcategory.tags)}`);
+          appendConfigFields(lines, subcategory.fields, 8);
           lines.push("        presets:");
           if (!subcategory.presets.length) lines.push("          {}");
           for (const preset of subcategory.presets) {
@@ -2564,6 +2945,7 @@
             if (preset.negativePrompt.trim()) lines.push("            negative_prompt: |-", indentPrompt(preset.negativePrompt, 14));
             if (preset.templateSlot.trim()) lines.push(`            template_slot: ${quote(preset.templateSlot.trim())}`);
             if (preset.tags.length) lines.push("            metadata:", `              tags: ${tagYaml(preset.tags)}`);
+            appendConfigFields(lines, preset.fields, 12);
             const populatedAddenda = preset.addenda.filter(isConfiguredAddendum);
             if (populatedAddenda.length) {
               lines.push("            addenda:");
@@ -2598,6 +2980,9 @@
       let preset = null;
       let addendum = null;
       let addendaSection = false;
+      let configField = null;
+      let configOption = null;
+      let fieldsIndent = null;
       let blockTarget = null;
       let blockProperty = null;
       let blockIndent = null;
@@ -2624,6 +3009,10 @@
           finishBlock();
         }
         if (!text || text.startsWith("#") || text.startsWith("version:")) continue;
+        if (fieldsIndent != null && indent <= fieldsIndent && text !== "fields:") {
+          configField = configOption = null;
+          fieldsIndent = null;
+        }
         if (section === "categories" && indent <= 12 && text !== "addenda:") {
           addendaSection = false;
           addendum = null;
@@ -2632,6 +3021,62 @@
         if (indent === 0 && text === "categories:") { section = "categories"; category = subcategory = preset = null; continue; }
 
         const keyMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*):$/);
+        if (section === "categories" && text === "fields:" && [4, 8, 12].includes(indent)) {
+          const owner = indent === 4 ? category : indent === 8 ? subcategory : preset;
+          if (owner) {
+            owner.fields ??= [];
+            fieldsIndent = indent;
+            configField = configOption = null;
+            continue;
+          }
+        }
+        if (section === "categories" && fieldsIndent != null && indent === fieldsIndent + 2 && keyMatch) {
+          configField = newConfigField(keyMatch[1]);
+          configField.key = keyMatch[1];
+          configField.autoKey = false;
+          const owner = fieldsIndent === 4 ? category : fieldsIndent === 8 ? subcategory : preset;
+          owner.fields.push(configField);
+          configOption = null;
+          continue;
+        }
+        if (section === "categories" && fieldsIndent != null && configField && indent === fieldsIndent + 4 && text === "options:") {
+          configOption = null;
+          continue;
+        }
+        if (section === "categories" && fieldsIndent != null && configField && indent === fieldsIndent + 6 && keyMatch) {
+          configOption = newFieldOption(keyMatch[1]);
+          configOption.key = keyMatch[1];
+          configOption.autoKey = false;
+          configField.options.push(configOption);
+          continue;
+        }
+        if (section === "categories" && fieldsIndent != null && configField && indent === fieldsIndent + 4) {
+          const fieldValue = text.match(/^(label|type|default|disabled):\s*(.*)$/);
+          if (fieldValue) {
+            const property = fieldValue[1];
+            const value = parseScalar(fieldValue[2]);
+            if (property === "label") configField.label = value;
+            else if (property === "type") {
+              configField.type = value;
+              if (value !== "checkbox" && configField.defaultValue === false) configField.defaultValue = "";
+            }
+            else if (property === "disabled") configField.disabled = /^(true|yes|1)$/i.test(String(value));
+            else configField.defaultValue = /^(true|yes)$/i.test(String(value)) ? true : /^(false|no)$/i.test(String(value)) ? false : value;
+            continue;
+          }
+          if (/^prompt:\s*[>|]/.test(text)) {
+            blockTarget = configField; blockProperty = "prompt"; blockIndent = fieldsIndent + 6; blockLines = [];
+            continue;
+          }
+        }
+        if (section === "categories" && fieldsIndent != null && configOption && indent === fieldsIndent + 8) {
+          const optionLabel = text.match(/^label:\s*(.*)$/);
+          if (optionLabel) { configOption.label = parseScalar(optionLabel[1]); continue; }
+          if (/^prompt:\s*[>|]/.test(text)) {
+            blockTarget = configOption; blockProperty = "prompt"; blockIndent = fieldsIndent + 10; blockLines = [];
+            continue;
+          }
+        }
         if (section === "templates" && indent === 2 && keyMatch) {
           templateCategory = newTemplateCategory(keyMatch[1]);
           templateCategory.key = keyMatch[1];
@@ -3053,6 +3498,7 @@
     });
     document.querySelector("#clearOverrides").addEventListener("click", () => {
       playground.overrides = {};
+      playground.fields = {};
       renderPlayground();
     });
     document.querySelector("#collapseAll").addEventListener("click", () => {
@@ -3079,7 +3525,7 @@
     });
     document.querySelector("#newButton").addEventListener("click", () => {
       if (!confirm("Start a new library? Your current builder state will be replaced.")) return;
-      state = blankState(); selection = null; templateSelection = null; expandedIds.clear(); playground = { templateId: null, seed: 1, selections: {}, overrides: {} }; render();
+      state = blankState(); selection = null; templateSelection = null; expandedIds.clear(); playground = { templateId: null, seed: 1, selections: {}, overrides: {}, addenda: {}, fields: {} }; render();
     });
     document.querySelector("#importButton").addEventListener("click", () => document.querySelector("#fileInput").click());
     document.querySelector("#loadServerButton").addEventListener("click", loadLibraryFromComfyUI);
@@ -3131,6 +3577,8 @@
         playground.templateId = allTemplates()[0]?.template.id ?? null;
         playground.selections = {};
         playground.overrides = {};
+        playground.addenda = {};
+        playground.fields = {};
         render();
       } catch (error) {
         const status = document.querySelector("#status");

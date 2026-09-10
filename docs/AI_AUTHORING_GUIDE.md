@@ -36,6 +36,8 @@ Every reusable snippet is a preset item with:
 - optional template_slot override
 - optional tags array
 - optional addenda object containing toggleable prompt fragments
+- optional fields objects on the category, subcategory, or preset containing
+  inherited checkbox, select, text, or multiline controls
 
 Every complete prompt framework is a template item with:
 - type: "template"
@@ -49,6 +51,15 @@ Every complete prompt framework is a template item with:
 
 Stable keys use ASCII snake_case, start with a letter or underscore, and must
 remain unchanged once workflows use them. Friendly labels may be renamed.
+
+Configurable fields inherit by stable key in this order: category, then
+subcategory, then preset. A lower level replaces the inherited field properties
+it defines, while select options merge by their own stable keys. Use `checkbox`
+for fixed optional prompt text, `select` for named alternatives, and `text` or
+`multiline` for user-entered values. Text prompt patterns may contain `{{value}}`;
+without a pattern, the entered value is appended directly. These fields are
+currently rendered by the Workbench Prompt Playground and are ignored safely by
+the ComfyUI nodes.
 
 Write snippets so they describe only their own concern. Keep wardrobe out of
 characters, camera framing out of poses, lighting out of locations, and scene
@@ -125,7 +136,29 @@ large mixed packet.
       "category": {
         "key": "lighting",
         "label": "Lighting",
-        "template_slot": "lighting"
+        "template_slot": "lighting",
+        "fields": {
+          "intensity": {
+            "label": "Intensity",
+            "type": "select",
+            "default": "balanced",
+            "options": {
+              "balanced": {
+                "label": "Balanced",
+                "prompt": "Keep the lighting intensity balanced."
+              },
+              "dramatic": {
+                "label": "Dramatic",
+                "prompt": "Increase contrast and directional lighting intensity."
+              }
+            }
+          },
+          "custom_lighting_note": {
+            "label": "Custom Lighting Note",
+            "type": "multiline",
+            "prompt": "Additional lighting direction: {{value}}"
+          }
+        }
       },
       "subcategory": {
         "key": "neon",

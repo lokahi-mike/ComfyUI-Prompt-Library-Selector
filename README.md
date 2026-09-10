@@ -109,6 +109,8 @@ Random preset uses the same category controls for its resolved choice.
 - Clone presets with automatically collision-safe stable keys
 - Move presets between subcategories without losing prompts or addenda
 - Copy any preset as importable JSON for transfer between libraries
+- Inherited checkbox, select, text, and multiline fields at category,
+  subcategory, and preset scope
 - Automatic snake-case stable keys with duplicate-key validation
 - Live generated YAML with internal round-trip validation
 - Prompt Playground for testing complete assembled prompts offline
@@ -419,6 +421,23 @@ Each preset supports:
 - Optional metadata tags
 - Optional toggleable addenda, including defaults
 
+Categories, subcategories, and presets can also define **Configurable fields**.
+Matching stable keys resolve from broadest to most specific:
+
+```text
+Category → Subcategory override → Preset override
+```
+
+Checkbox fields contribute a fixed prompt when enabled. Select fields contribute
+the chosen option's prompt. Text and multiline fields either append their value
+directly or place it into a prompt pattern containing `{{value}}`. Select options
+also merge by stable key, allowing a lower level to replace one inherited choice
+without copying every option.
+
+These inherited fields currently power the browser Workbench and Prompt
+Playground. ComfyUI Selector nodes safely ignore the additional YAML until a
+future node interface is designed for dynamic fields.
+
 New keys follow the label automatically until manually edited. Categories and
 subcategories start collapsed, remember their state, and can be expanded or
 collapsed together.
@@ -467,7 +486,8 @@ The Playground assembles a selected template entirely in the browser. Choose a
 preset or Random value for each variable and inspect the final positive prompt,
 negative prompt, and tags before spending generation credits.
 Addenda appear as switches beneath the selected preset, so their combined
-effect can be tested offline too.
+effect can be tested offline too. Inherited configurable fields appear beneath
+the same preset and update the assembled prompt immediately.
 
 Temporary overrides let you experiment without modifying the library. **Load
 selected text** copies a preset into the override editor; **Use library
